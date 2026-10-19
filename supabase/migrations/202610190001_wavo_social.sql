@@ -157,3 +157,6 @@ grant select, insert on public.wavo_messages to authenticated;
 -- Supabase Realtime broadcasts only rows visible through the policies above.
 alter publication supabase_realtime add table public.wavo_friendships;
 alter publication supabase_realtime add table public.wavo_messages;
+
+-- Make the new tables visible to the Supabase Data API immediately.
+notify pgrst, 'reload schema';

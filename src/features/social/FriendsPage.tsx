@@ -12,12 +12,12 @@ const copy = {
   de: {
     title: "Freunde", subtitle: "Musik zusammen entdecken", search: "Nutzername suchen", noFriends: "Noch keine Freunde. Suche nach einem Nutzernamen und sende eine Anfrage.",
     requests: "Anfragen", friends: "Freunde", add: "Anfrage senden", pending: "Anfrage gesendet", accept: "Annehmen", decline: "Ablehnen", remove: "Entfernen", you: "Du", sent: "Warte auf Antwort", chatEmpty: "Schreib deinem Freund eine Nachricht oder teile eine Playlist.",
-    select: "Wähle einen Freund zum Schreiben", message: "Nachricht schreiben …", send: "Senden", share: "Playlist teilen", shareHint: "Wähle einen Freund und sende die Playlist als Kopie.", import: "In meine Bibliothek importieren", imported: "Playlist importiert", messageSent: "Gesendet", searchEmpty: "Keine Nutzer gefunden", error: "Social-Datenbank noch nicht eingerichtet oder nicht erreichbar.",
+    select: "Wähle einen Freund zum Schreiben", message: "Nachricht schreiben …", send: "Senden", share: "Playlist teilen", shareHint: "Wähle einen Freund und sende die Playlist als Kopie.", import: "In meine Bibliothek importieren", imported: "Playlist importiert", messageSent: "Gesendet", searchEmpty: "Keine Nutzer gefunden", setupMissing: "Die Freunde-Tabellen fehlen in Supabase. Führe die Wavo-SQL-Migration im SQL Editor aus.", unknownError: "Ein unbekannter Fehler ist aufgetreten.",
   },
   en: {
     title: "Friends", subtitle: "Discover music together", search: "Search username", noFriends: "No friends yet. Search for a username and send a request.",
     requests: "Requests", friends: "Friends", add: "Send request", pending: "Request sent", accept: "Accept", decline: "Decline", remove: "Remove", you: "You", sent: "Waiting for reply", chatEmpty: "Write a message or share a playlist with your friend.",
-    select: "Choose a friend to chat", message: "Write a message …", send: "Send", share: "Share playlist", shareHint: "Choose a friend and send a copy of the playlist.", import: "Import to my library", imported: "Playlist imported", messageSent: "Sent", searchEmpty: "No users found", error: "The social database is not set up or is unavailable.",
+    select: "Choose a friend to chat", message: "Write a message …", send: "Send", share: "Share playlist", shareHint: "Choose a friend and send a copy of the playlist.", import: "Import to my library", imported: "Playlist imported", messageSent: "Sent", searchEmpty: "No users found", setupMissing: "The friends tables are missing in Supabase. Run the Wavo SQL migration in the SQL Editor.", unknownError: "An unknown error occurred.",
   },
 };
 
@@ -25,8 +25,14 @@ function initials(profile?: SocialProfile): string {
   return (profile?.display_name || profile?.username || "?").slice(0, 2).toUpperCase();
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function errorText(error: unknown, setupMissing: string, unknownError: string): string {
+  if (error && typeof error === "object") {
+    const issue = error as { code?: unknown; message?: unknown };
+    if (issue.code === "PGRST205") return setupMissing;
+    if (typeof issue.message === "string" && issue.message.trim()) return issue.message;
+  }
+  if (typeof error === "string" && error.trim()) return error;
+  return unknownError;
 }
 
 export default function FriendsPage() {
@@ -58,11 +64,11 @@ export default function FriendsPage() {
       setProfiles(Object.fromEntries(people.map((person) => [person.user_id, person])));
       setError("");
     } catch (cause) {
-      setError(errorText(cause));
+      setError(errorText(cause, c.setupMissing, c.unknownError));
     } finally {
       setLoading(false);
     }
-  }, [me]);
+  }, [me, c.setupMissing, c.unknownError]);
 
   useEffect(() => {
     if (!me) return;
@@ -79,15 +85,15 @@ export default function FriendsPage() {
     if (!search.trim()) { setResults([]); return; }
     let alive = true;
     const timer = window.setTimeout(() => {
-      void socialClient.searchProfiles(search).then((items) => { if (alive) setResults(items); }).catch((cause) => { if (alive) setError(errorText(cause)); });
+      void socialClient.searchProfiles(search).then((items) => { if (alive) setResults(items); }).catch((cause) => { if (alive) setError(errorText(cause, c.setupMissing, c.unknownError)); });
     }, 250);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [search]);
+  }, [search, c.setupMissing, c.unknownError]);
 
   const loadMessages = useCallback(async (friendId: string) => {
     try { setMessages(await socialClient.messages(friendId)); setError(""); }
-    catch (cause) { setError(errorText(cause)); }
-  }, []);
+    catch (cause) { setError(errorText(cause, c.setupMissing, c.unknownError)); }
+  }, [c.setupMissing, c.unknownError]);
 
   useEffect(() => {
     if (!selectedId) { setMessages([]); return; }
@@ -108,9 +114,9 @@ export default function FriendsPage() {
   useEffect(() => {
     if (!sharePlaylistId) { setShareTitle(""); return; }
     let alive = true;
-    void api.getUserPlaylist(sharePlaylistId).then(({ playlist }) => { if (alive) setShareTitle(playlist.title); }).catch((cause) => { if (alive) setError(errorText(cause)); });
+    void api.getUserPlaylist(sharePlaylistId).then(({ playlist }) => { if (alive) setShareTitle(playlist.title); }).catch((cause) => { if (alive) setError(errorText(cause, c.setupMissing, c.unknownError)); });
     return () => { alive = false; };
-  }, [sharePlaylistId]);
+  }, [sharePlaylistId, c.setupMissing, c.unknownError]);
 
   const accepted = useMemo(() => friendships.filter((row) => row.status === "accepted"), [friendships]);
   const incoming = useMemo(() => friendships.filter((row) => row.status === "pending" && row.addressee_id === me), [friendships, me]);
@@ -120,7 +126,7 @@ export default function FriendsPage() {
   const act = async (action: () => Promise<void>) => {
     setBusy(true);
     try { await action(); await loadFriends(); setError(""); }
-    catch (cause) { setError(errorText(cause)); }
+    catch (cause) { setError(errorText(cause, c.setupMissing, c.unknownError)); }
     finally { setBusy(false); }
   };
 
@@ -144,7 +150,7 @@ export default function FriendsPage() {
       if (sharePlaylistId) setParams({}, { replace: true });
       await loadMessages(selectedId);
       toast(c.messageSent, "checkmark");
-    } catch (cause) { setError(errorText(cause)); }
+    } catch (cause) { setError(errorText(cause, c.setupMissing, c.unknownError)); }
     finally { setBusy(false); }
   };
 
@@ -169,7 +175,7 @@ export default function FriendsPage() {
           <div className="flex h-[44px] w-[44px] items-center justify-center rounded-[14px] bg-accent/20 text-accent"><LuUsers size={23} /></div>
           <div><h1 className="m-0 text-[27px] font-bold">{c.title}</h1><p className="m-0 text-[13px] text-text-tertiary">{c.subtitle}</p></div>
         </div>
-        {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{c.error} {error}</div>}
+        {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{error}</div>}
         <div className="grid min-h-[580px] grid-cols-1 gap-[12px] lg:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70 p-[14px]">
             <label className="flex items-center gap-[8px] rounded-[10px] border border-border-alpha-15 bg-bg-primary px-[12px] py-[9px] text-text-tertiary">
