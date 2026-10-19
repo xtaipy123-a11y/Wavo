@@ -1,0 +1,10 @@
+{
+  "appId": "com.cinecloud.movo",
+  "productName": "Movo",
+  "executableName": "Movo",
+  "artifactName": "Movo-Setup-${version}.${ext}",
+  "directories": { "output": "release" },
+  "files": ["dist/**/*", "dist-electron/**/*"],
+  "win": { "icon": "build/movo.ico", "target": ["nsis"] },
+  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+}

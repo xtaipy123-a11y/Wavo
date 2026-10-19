@@ -1,0 +1,19 @@
+{
+  "wavoThemeVersion": 1,
+  "id": "midnight-blue",
+  "name": "Midnight Blue",
+  "light": {
+    "background": "#f0f5ff",
+    "surface": "#ffffff",
+    "elevated": "#dce7ff",
+    "text": "#102040",
+    "accent": "#2867c9"
+  },
+  "dark": {
+    "background": "#10192a",
+    "surface": "#080f1e",
+    "elevated": "#1c2d48",
+    "text": "#e6efff",
+    "accent": "#72aaff"
+  }
+}

@@ -1,0 +1,15 @@
+.series-section{border-top:1px solid #37383f;margin-top:24px;padding-top:20px}
+.series-section h3{font:700 19px 'Space Grotesk';margin:0 0 14px}
+.season-tabs{display:flex;gap:8px;overflow-x:auto;padding:0 0 14px}
+.season-tabs button{border:1px solid #3a3b42;border-radius:7px;background:#202127;color:#aeb0b8;padding:8px 12px;font-size:11px;font-weight:700;white-space:nowrap}
+.season-tabs button.active,.season-tabs button:hover{border-color:#efa27f;color:#21181d;background:#efa27f}
+.series-note{font-size:12px;color:#8e909a;margin:10px 0}
+.episode-list{display:grid;gap:7px;max-height:320px;overflow-y:auto}
+.episode-item{width:100%;border:1px solid #32333b;border-radius:9px;background:#212229;color:#f0f0f2;display:flex;align-items:center;gap:13px;text-align:left;padding:11px 13px}
+.episode-item:hover{border-color:#e69372;background:#29252a}
+.episode-number{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:7px;background:#393039;color:#f0a17d;font-size:12px;font-weight:800}
+.episode-copy{min-width:0;flex:1}
+.episode-copy strong,.episode-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.episode-copy strong{font-size:12px}
+.episode-copy small{font-size:10px;color:#8d8f99;margin-top:4px}
+.episode-item>svg{flex:none;color:#e9a17f}

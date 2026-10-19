@@ -1,0 +1,43 @@
+name: Release Wavo for Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check release version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag and package.json version do not match" }
+      - name: Build app and Windows installer
+        run: pnpm run release:win
+        env:
+          VITE_API_URL: https://api.tryliner.fun
+          VITE_COVERS_PROXY_URL: https://covers.tryliner.fun
+          VITE_SUPABASE_URL: https://fuojxlhsmivjgxcbhnyq.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_eXIjgCqlOQHnzcI037r1LQ_KAk3ruiW
+      - name: Publish installer and update metadata
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            release/Wavo-Setup-*.exe
+            release/Wavo-Setup-*.exe.blockmap
+            release/latest.yml
+          fail_on_unmatched_files: true
