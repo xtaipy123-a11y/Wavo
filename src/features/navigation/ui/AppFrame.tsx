@@ -53,7 +53,7 @@ import {
   useModalStore,
 } from "@/features/library";
 import { SettingsModal, useCustomizationStore, getBlockStyle } from "@/features/settings";
-import { UpdateModal } from "@/features/updater";
+import { UpdateControl, UpdateModal } from "@/features/updater";
 
 
 interface AppFrameProps {
@@ -1067,6 +1067,7 @@ export default function AppFrame({ children }: AppFrameProps) {
       <ImportReviewModal />
       <SettingsModal />
       <UpdateModal />
+      {!isFullscreenPlayer && <UpdateControl />}
       <WindowControls
         isFullscreen={isFullscreenPlayer}
         style={{

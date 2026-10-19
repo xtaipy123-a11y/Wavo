@@ -98,7 +98,7 @@ const SETTING_ITEMS: { tabId: TabId; titleKey: string; descKey?: string }[] = [
   { tabId: "Storage", titleKey: "settings.storage.open_folder", descKey: "settings.storage.open_folder_description" },
 
   // About
-  { tabId: "About", titleKey: "settings.about.wavo", descKey: "common.app.version" },
+  { tabId: "About", titleKey: "settings.about.updates_title", descKey: "settings.about.check_updates" },
   { tabId: "About", titleKey: "settings.notifications.test_button" },
 ];
 
@@ -126,7 +126,7 @@ export default function SettingsModal() {
     Extensions: t("settings.tabs.extensions"),
     Audio: t("settings.tabs.audio"),
     Storage: t("settings.tabs.storage"),
-    About: t("settings.tabs.about"),
+    About: t("settings.about.updates_title"),
   };
 
   const tabDescriptions: Record<TabId, string> = {
@@ -155,7 +155,7 @@ export default function SettingsModal() {
       Extensions: "settings.tabs.extensions",
       Audio: "settings.tabs.audio",
       Storage: "settings.tabs.storage",
-      About: "settings.tabs.about",
+      About: "settings.about.updates_title",
     };
 
     const TAB_DESC_KEYS: Record<TabId, string> = {

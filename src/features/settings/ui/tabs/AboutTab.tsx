@@ -50,6 +50,9 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
   } | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [lastCheckedTime, setLastCheckedTime] = useState<string | null>(null);
+  const updateStatus = useUpdaterStore((state) => state.status);
+  const updateProgress = useUpdaterStore((state) => state.downloadProgress);
+  const updateError = useUpdaterStore((state) => state.error);
 
   useEffect(() => {
     // dynamically query electron runtime version & bundle status
@@ -77,7 +80,15 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
   }, []);
 
   const handleCheckUpdates = async () => {
-    if (checkingUpdate) return;
+    if (checkingUpdate || updateStatus === "checking" || updateStatus === "downloading") return;
+    if (updateStatus === "downloaded") {
+      await useUpdaterStore.getState().installUpdate();
+      return;
+    }
+    if (updateStatus === "available") {
+      useUpdaterStore.getState().openDialog();
+      return;
+    }
     if (!window.wavoElectron?.checkForUpdates) {
       toast(t("settings.about.updates_desktop_only"), "info");
       return;
@@ -91,8 +102,8 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
       } else if (status !== "error") {
         toast(t("settings.about.latest_version_toast", { version: appVersion }), "info");
       }
-    } catch {
-      toast(t("settings.about.latest_version_toast", { version: appVersion }), "info");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : t("updater.error_title"), "error");
     } finally {
       setCheckingUpdate(false);
       const now = new Date();
@@ -179,18 +190,29 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
             variant="secondary"
             size="sm"
             onClick={handleCheckUpdates}
-            disabled={checkingUpdate}
+            disabled={checkingUpdate || updateStatus === "checking" || updateStatus === "downloading"}
             className="!h-[32px] !px-[16px] !text-[12.5px] !gap-[7px] !rounded-lg"
           >
             <Refresh1Line
               size={14}
-              className={checkingUpdate ? "animate-spin text-text-primary" : "text-text-tertiary"}
+              className={checkingUpdate || updateStatus === "checking" || updateStatus === "downloading" ? "animate-spin text-text-primary" : "text-text-tertiary"}
             />
-            {checkingUpdate
+            {updateStatus === "downloaded"
+              ? t("updater.install_button")
+              : updateStatus === "downloading"
+                ? `${t("updater.downloading_title")} ${Math.round(updateProgress?.percent ?? 0)}%`
+              : checkingUpdate || updateStatus === "checking"
               ? t("settings.about.checking_updates")
               : t("settings.about.check_updates")}
           </Button>
         </div>
+
+        {updateStatus === "error" && updateError && (
+          <p role="alert" className="m-0 text-[12px] text-red-400">{updateError}</p>
+        )}
+        {updateStatus === "downloaded" && (
+          <p role="status" className="m-0 text-[12px] text-emerald-400">{t("updater.downloaded_title")}</p>
+        )}
 
       </div>
     </div>
