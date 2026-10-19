@@ -7,6 +7,7 @@ import { useAuthStore } from "@/features/auth/store/authStore";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { parseSharedPlaylist, socialClient, type Friendship, type SocialMessage, type SocialProfile } from "./socialClient";
+import ListeningPanel from "./ListeningPanel";
 
 const copy = {
   de: {
@@ -176,6 +177,7 @@ export default function FriendsPage() {
           <div><h1 className="m-0 text-[27px] font-bold">{c.title}</h1><p className="m-0 text-[13px] text-text-tertiary">{c.subtitle}</p></div>
         </div>
         {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{error}</div>}
+        <ListeningPanel friends={accepted.map((row) => { const id = personId(row); return { id, profile: profiles[id] }; })} />
         <div className="grid min-h-[580px] grid-cols-1 gap-[12px] lg:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70 p-[14px]">
             <label className="flex items-center gap-[8px] rounded-[10px] border border-border-alpha-15 bg-bg-primary px-[12px] py-[9px] text-text-tertiary">

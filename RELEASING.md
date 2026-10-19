@@ -12,6 +12,8 @@ Die App liest die öffentliche GitHub-Releasequelle über `electron-updater`. Ei
 
 `v0.1.44` enthält die sichtbare Update-Schaltfläche. Den vorbereiteten Commit mit `git push origin main` hochladen, danach mit `git push origin v0.1.44` den Release-Workflow starten. Unter **Actions** den erfolgreichen Lauf und unter **Releases** den Installer, die `.exe.blockmap` und `latest.yml` prüfen. Lokale Installer aus `corepack pnpm run release:win` erzeugen keinen GitHub Release.
 
+Für `v0.1.45` zuerst `supabase/migrations/202610190002_wavo_listening_rooms.sql` im SQL Editor des Wavo-Supabase-Projekts ausführen. Danach den Code committen, `main` pushen und den Tag `v0.1.45` auf genau diesen Commit setzen und pushen. So erhalten die installierten Clients die gemeinsame Hörsession über den Auto-Updater.
+
 Für spätere Versionen `package.json` erhöhen, committen und pushen, danach den dazu passenden Tag `v<version>` pushen.
 
 ## Freunde und Nachrichten

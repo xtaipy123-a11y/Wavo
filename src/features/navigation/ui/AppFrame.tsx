@@ -54,6 +54,7 @@ import {
 } from "@/features/library";
 import { SettingsModal, useCustomizationStore, getBlockStyle } from "@/features/settings";
 import { UpdateControl, UpdateModal } from "@/features/updater";
+import ListeningBanner from "@/features/social/ListeningBanner";
 
 
 interface AppFrameProps {
@@ -785,6 +786,7 @@ export default function AppFrame({ children }: AppFrameProps) {
           )}
         </main>
 
+        <ListeningBanner />
         {shouldShowMiniPlayer && (
           <div
             ref={miniPlayerContainerRef}

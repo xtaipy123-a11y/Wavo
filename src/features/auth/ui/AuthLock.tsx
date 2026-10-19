@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import AppFrame from "@/features/navigation/ui/AppFrame";
+import ListeningSync from "@/features/social/ListeningSync";
 
 export function AuthLock({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return pathname === "/login" ? children : <AppFrame>{children}</AppFrame>;
+  return pathname === "/login" ? children : <><ListeningSync /><AppFrame>{children}</AppFrame></>;
 }
 
 export default AuthLock;
