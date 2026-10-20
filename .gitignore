@@ -16,6 +16,7 @@
 !/build/icons/
 !/build/icon.png
 !/build/icon.ico
+!/build/installer.nsh
 
 # testing
 /coverage

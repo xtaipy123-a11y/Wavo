@@ -1,4 +1,8 @@
-# Neu in Wavo 0.1.49
+# Neu in Wavo 0.1.50
+
+- Der Windows-Installer kann bestehende Wavo-Installationen auf einem anderen Laufwerk als dem Windows-Temp-Ordner jetzt aktualisieren und deinstallieren. Das behebt den Fehler „Die alten Anwendungsdateien konnten nicht deinstalliert werden: 2“.
+
+## Seit 0.1.49
 
 - Wavo Cloud synchronisiert Favoriten, eigene Playlists, gespeicherte Alben und Künstler, Hörverlauf, Warteschlange, Wiedergabeposition, Einstellungen, Themes und Smart-Playlist-Regeln. Offline-Änderungen werden später abgeglichen.
 - Wavo Connect zeigt angemeldete Geräte und erlaubt Fernsteuerung sowie die Fortsetzung auf einem anderen Gerät.
