@@ -9,8 +9,23 @@ export interface ListeningRoom {
   track_title: string | null;
   position_ms: number;
   is_playing: boolean;
+  allow_guest_add: boolean;
+  allow_guest_skip: boolean;
+  allow_guest_reorder: boolean;
+  queue_snapshot: ListeningQueueItem[];
   created_at: string;
   updated_at: string;
+}
+
+export interface ListeningQueueItem { index: number; id: string; title: string; artists: string }
+export interface ListeningCommand {
+  id: string;
+  room_id: string;
+  actor_id: string;
+  kind: "add" | "skip" | "move";
+  track_id: string | null;
+  from_index: number | null;
+  to_index: number | null;
 }
 
 export interface ListeningMember {
@@ -20,6 +35,9 @@ export interface ListeningMember {
   status: "invited" | "active";
   created_at: string;
   joined_at: string | null;
+  can_add: boolean | null;
+  can_skip: boolean | null;
+  can_reorder: boolean | null;
 }
 
 export interface ListeningInvitation {
@@ -40,8 +58,8 @@ function validId(id: string): string {
   return id;
 }
 
-const roomColumns = "id,host_id,active,track_id,track_title,position_ms,is_playing,created_at,updated_at";
-const memberColumns = "room_id,user_id,invited_by,status,created_at,joined_at";
+const roomColumns = "id,host_id,active,track_id,track_title,position_ms,is_playing,allow_guest_add,allow_guest_skip,allow_guest_reorder,queue_snapshot,created_at,updated_at";
+const memberColumns = "room_id,user_id,invited_by,status,created_at,joined_at,can_add,can_skip,can_reorder";
 
 export const listeningClient = {
   async snapshot(): Promise<{ room: ListeningRoom | null; members: ListeningMember[]; invitations: ListeningInvitation[] }> {
@@ -68,10 +86,10 @@ export const listeningClient = {
     return { room, members: (roomMembers ?? []) as ListeningMember[], invitations };
   },
 
-  async createRoom(trackId: string | null, trackTitle: string | null, positionMs: number, isPlaying: boolean): Promise<ListeningRoom> {
+  async createRoom(trackId: string | null, trackTitle: string | null, positionMs: number, isPlaying: boolean, queue: ListeningQueueItem[]): Promise<ListeningRoom> {
     const { data, error } = await getSupabaseClient().from("wavo_listening_rooms")
       .insert({ host_id: myId(), track_id: trackId, track_title: trackTitle,
-        position_ms: Math.max(0, Math.round(positionMs)), is_playing: isPlaying })
+        position_ms: Math.max(0, Math.round(positionMs)), is_playing: isPlaying, queue_snapshot: queue })
       .select(roomColumns).single();
     if (error) throw error;
     return data as ListeningRoom;
@@ -103,11 +121,48 @@ export const listeningClient = {
     if (error) throw error;
   },
 
-  async publish(roomId: string, trackId: string | null, trackTitle: string | null, positionMs: number, isPlaying: boolean): Promise<void> {
+  async publish(roomId: string, trackId: string | null, trackTitle: string | null, positionMs: number, isPlaying: boolean, queue: ListeningQueueItem[]): Promise<void> {
     const { error } = await getSupabaseClient().from("wavo_listening_rooms")
       .update({ track_id: trackId, track_title: trackTitle,
-        position_ms: Math.max(0, Math.round(positionMs)), is_playing: isPlaying })
+        position_ms: Math.max(0, Math.round(positionMs)), is_playing: isPlaying, queue_snapshot: queue })
       .eq("id", validId(roomId)).eq("host_id", myId()).eq("active", true);
     if (error) throw error;
+  },
+
+  async setPermissions(roomId: string, permissions: Pick<ListeningRoom, "allow_guest_add" | "allow_guest_skip" | "allow_guest_reorder">): Promise<void> {
+    const { error } = await getSupabaseClient().from("wavo_listening_rooms")
+      .update(permissions).eq("id", validId(roomId)).eq("host_id", myId()).eq("active", true);
+    if (error) throw error;
+  },
+
+  async setMemberPermission(roomId: string, userId: string, key: "can_add" | "can_skip" | "can_reorder", value: boolean | null): Promise<void> {
+    const { error } = await getSupabaseClient().from("wavo_listening_members")
+      .update({ [key]: value }).eq("room_id", validId(roomId)).eq("user_id", validId(userId)).eq("status", "active");
+    if (error) throw error;
+  },
+
+  async request(roomId: string, kind: ListeningCommand["kind"], options: { trackId?: string; fromIndex?: number; toIndex?: number } = {}): Promise<void> {
+    const { error } = await getSupabaseClient().from("wavo_listening_commands").insert({
+      room_id: validId(roomId), actor_id: myId(), kind,
+      track_id: options.trackId ?? null, from_index: options.fromIndex ?? null, to_index: options.toIndex ?? null,
+    });
+    if (error) throw error;
+  },
+
+  async pendingCommands(roomId: string): Promise<ListeningCommand[]> {
+    const { data, error } = await getSupabaseClient().from("wavo_listening_commands")
+      .select("id,room_id,actor_id,kind,track_id,from_index,to_index")
+      .eq("room_id", validId(roomId)).is("processed_at", null)
+      .order("created_at", { ascending: true }).limit(30);
+    if (error) throw error;
+    return (data ?? []) as ListeningCommand[];
+  },
+
+  async claimCommand(commandId: string): Promise<boolean> {
+    const { data, error } = await getSupabaseClient().from("wavo_listening_commands")
+      .update({ processed_at: new Date().toISOString() }).eq("id", validId(commandId))
+      .is("processed_at", null).select("id");
+    if (error) throw error;
+    return Boolean(data?.length);
   },
 };

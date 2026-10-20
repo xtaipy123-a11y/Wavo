@@ -87,6 +87,7 @@ export interface WavoElectronApi {
   checkForUpdates: () => Promise<{ available: boolean; version?: string; releaseNotes?: string; error?: string }>;
   downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
   quitAndInstall: () => Promise<boolean>;
+  getPostUpdateInfo: () => Promise<UpdateInfo | null>;
   onUpdateAvailable: (cb: (info: UpdateInfo) => void) => () => void;
   onUpdateDownloadProgress: (cb: (progress: UpdateDownloadProgress) => void) => () => void;
   onUpdateDownloaded: (cb: (info: { version: string }) => void) => () => void;
@@ -191,6 +192,7 @@ const api: WavoElectronApi = {
   checkForUpdates: () => ipcRenderer.invoke("updater:check-for-updates"),
   downloadUpdate: () => ipcRenderer.invoke("updater:download-update"),
   quitAndInstall: () => ipcRenderer.invoke("updater:quit-and-install"),
+  getPostUpdateInfo: () => ipcRenderer.invoke("updater:get-post-update"),
   onUpdateAvailable: (cb) => {
     const listener = (_event: unknown, info: UpdateInfo) => cb(info);
     ipcRenderer.on("updater:update-available", listener);

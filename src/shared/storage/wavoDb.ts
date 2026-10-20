@@ -25,6 +25,9 @@ export interface CachedAudioRecord {
   byteSize: number;
   savedAt: number;
   lastPlayedAt?: number;
+  pinned?: boolean;
+  pinnedAt?: number;
+  downloadTrack?: Track;
 }
 
 export interface CachedLyricsRecord {
@@ -57,7 +60,7 @@ export interface StoredUserPlaylistRecord {
 }
 
 const DB_NAME = "wavo_db_v1";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 const MEM_AUDIO_LIMIT = 3;
 
@@ -104,10 +107,14 @@ class WavoDb {
           audioStore.createIndex("savedAt", "savedAt", { unique: false });
           audioStore.createIndex("byteSize", "byteSize", { unique: false });
           audioStore.createIndex("lastPlayedAt", "lastPlayedAt", { unique: false });
+          audioStore.createIndex("pinnedAt", "pinnedAt", { unique: false });
         } else {
           const audioStore = request.transaction?.objectStore("audio");
           if (audioStore && !audioStore.indexNames.contains("lastPlayedAt")) {
             audioStore.createIndex("lastPlayedAt", "lastPlayedAt", { unique: false });
+          }
+          if (audioStore && !audioStore.indexNames.contains("pinnedAt")) {
+            audioStore.createIndex("pinnedAt", "pinnedAt", { unique: false });
           }
         }
 
@@ -299,25 +306,85 @@ class WavoDb {
   }
 
   async putAudio(trackId: string, blob: Blob, mimeType: string, lastPlayedAt?: number): Promise<void> {
-    const existing = this.memAudio.get(trackId);
     const now = Date.now();
-    const record: CachedAudioRecord = {
-      trackId,
-      blob,
-      mimeType,
-      byteSize: blob.size,
-      savedAt: existing?.savedAt ?? now,
-      lastPlayedAt: lastPlayedAt ?? now,
-    };
-    this.rememberAudio(trackId, record);
-
-    await this.runTransaction("audio", "readwrite", (store) => {
-      return new Promise<void>((resolve, reject) => {
-        const req = store.put(record);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
+    const record = await this.runTransaction("audio", "readwrite", (store) => {
+      return new Promise<CachedAudioRecord>((resolve, reject) => {
+        const getRequest = store.get(trackId);
+        getRequest.onerror = () => reject(getRequest.error);
+        getRequest.onsuccess = () => {
+          const existing = getRequest.result as CachedAudioRecord | undefined;
+          const next: CachedAudioRecord = {
+            trackId, blob, mimeType, byteSize: blob.size,
+            savedAt: existing?.savedAt ?? now,
+            lastPlayedAt: lastPlayedAt ?? now,
+            pinned: existing?.pinned,
+            pinnedAt: existing?.pinnedAt,
+            downloadTrack: existing?.downloadTrack,
+          };
+          const putRequest = store.put(next);
+          putRequest.onsuccess = () => resolve(next);
+          putRequest.onerror = () => reject(putRequest.error);
+        };
       });
     });
+    if (record) {
+      this.rememberAudio(trackId, record);
+    } else {
+      const existing = this.memAudio.get(trackId);
+      this.rememberAudio(trackId, {
+        trackId, blob, mimeType, byteSize: blob.size,
+        savedAt: existing?.savedAt ?? now,
+        lastPlayedAt: lastPlayedAt ?? now,
+        pinned: existing?.pinned,
+        pinnedAt: existing?.pinnedAt,
+        downloadTrack: existing?.downloadTrack,
+      });
+    }
+  }
+
+  async pinAudio(track: Track, blob?: Blob): Promise<void> {
+    const now = Date.now();
+    const record = await this.runTransaction("audio", "readwrite", (store) => new Promise<CachedAudioRecord>((resolve, reject) => {
+      const getRequest = store.get(track.id);
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        const existing = getRequest.result as CachedAudioRecord | undefined;
+        const audio = blob ?? existing?.blob;
+        if (!audio?.size) { reject(new Error("No complete audio file is available for this song.")); return; }
+        const next: CachedAudioRecord = {
+          trackId: track.id,
+          blob: audio,
+          mimeType: audio.type || existing?.mimeType || "audio/webm",
+          byteSize: audio.size,
+          savedAt: existing?.savedAt ?? now,
+          lastPlayedAt: existing?.lastPlayedAt ?? now,
+          pinned: true,
+          pinnedAt: existing?.pinnedAt ?? now,
+          downloadTrack: track,
+        };
+        const putRequest = store.put(next);
+        putRequest.onsuccess = () => resolve(next);
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+    }));
+    if (!record) throw new Error("The download could not be saved on this device.");
+    this.rememberAudio(track.id, record);
+    await this.putTrack(track);
+  }
+
+  async getPinnedAudioRecords(): Promise<CachedAudioRecord[]> {
+    const records = await this.runTransaction("audio", "readonly", (store) => new Promise<CachedAudioRecord[]>((resolve, reject) => {
+      const request = store.index("pinnedAt").getAll();
+      request.onsuccess = () => resolve(request.result as CachedAudioRecord[]);
+      request.onerror = () => reject(request.error);
+    }));
+    return (records ?? [...this.memAudio.values()]).filter((record) => record.pinned && record.downloadTrack);
+  }
+
+  async clearUnpinnedAudio(): Promise<void> {
+    for (const record of await this.getOldestAudioRecords()) {
+      if (!record.pinned) await this.deleteAudio(record.trackId);
+    }
   }
 
   async touchAudio(trackId: string): Promise<void> {

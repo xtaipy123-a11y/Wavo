@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { useUpdaterStore } from "../store/updaterStore";
+import PostUpdateChangelog from "./PostUpdateChangelog";
 
 export default function UpdateToastBridge() {
   const { toast, dismiss } = useToast();
@@ -75,5 +76,5 @@ export default function UpdateToastBridge() {
     }
   }, [status, updateInfo, downloadProgress, error, toast, dismiss, t, installUpdate, reset]);
 
-  return null;
+  return <PostUpdateChangelog />;
 }

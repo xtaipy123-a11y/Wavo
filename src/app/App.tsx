@@ -1,4 +1,5 @@
 import { HashRouter } from "react-router-dom";
+import { useEffect } from "react";
 import { ThemeProvider } from "next-themes";
 import { ToastProvider, AppleEmojiProvider, RootErrorBoundary, GlobalTooltip, WindowAnimationContainer } from "@/shared/ui";
 import { useWindowDrag } from "@/shared/hooks";
@@ -18,6 +19,7 @@ import EnvironmentWarning from "./EnvironmentWarning";
 import { ConnectivityWall } from "@/features/connectivity";
 import { getAuthSession } from "@/shared/api";
 import "./globals.css";
+import { useDownloadStore } from "@/features/downloads/downloadStore";
 
 function AppIconSync() {
   useAppIconSync();
@@ -42,6 +44,11 @@ function TouchBarSync() {
 
 function OverlaySync() {
   useOverlaySync();
+  return null;
+}
+
+function OfflineDownloadsSync() {
+  useEffect(() => { void useDownloadStore.getState().hydrate(); }, []);
   return null;
 }
 
@@ -85,6 +92,7 @@ export default function App() {
         <PresenceSync />
         <TouchBarSync />
         <OverlaySync />
+        <OfflineDownloadsSync />
         <AppleEmojiProvider>
           <I18nProvider>
             <ToastProvider>

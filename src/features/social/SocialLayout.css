@@ -1,0 +1,87 @@
+.wavo-friends-page {
+  container-type: inline-size;
+  padding: 28px 24px;
+}
+
+.wavo-social-layout {
+  display: grid;
+  grid-template-columns: clamp(220px, 26%, 320px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+
+.wavo-social-people,
+.wavo-social-chat {
+  min-width: 0;
+  height: clamp(460px, 68dvh, 760px);
+}
+
+.wavo-social-people {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.wavo-social-messages {
+  min-height: 80px;
+  overscroll-behavior: contain;
+}
+
+.wavo-social-attachment {
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.wavo-social-back {
+  display: none;
+}
+
+.wavo-listening-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(240px, 1fr);
+}
+
+.wavo-listening-panel {
+  max-height: clamp(180px, 36dvh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.wavo-listening-grid > * {
+  min-width: 0;
+}
+
+@container (max-width: 760px) {
+  .wavo-social-layout {
+    grid-template-columns: minmax(175px, 31%) minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 640px) {
+  .wavo-listening-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 520px) {
+  .wavo-social-layout {
+    display: block;
+  }
+
+  .wavo-social-layout:not([data-chat-open="true"]) .wavo-social-chat,
+  .wavo-social-layout[data-chat-open="true"] .wavo-social-people {
+    display: none;
+  }
+
+  .wavo-social-back {
+    display: inline-flex;
+  }
+
+  .wavo-social-close {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .wavo-friends-page {
+    padding: 18px 14px;
+  }
+}

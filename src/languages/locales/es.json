@@ -51,6 +51,7 @@
       "home": "Inicio",
       "search": "Buscar",
       "library": "Biblioteca",
+      "downloads": "Descargas",
       "settings": "Ajustes"
     },
     "loading": "Cargando",
@@ -997,7 +998,7 @@
     "downloading_title": "Descargando actualización…",
     "downloaded_title": "Actualización descargada",
     "downloaded_desc": "Reinicia Wavo para instalar la versión {version}.",
-    "install_button": "Instalar",
+    "install_button": "Reiniciar ahora",
     "error_title": "Error en la actualización"
   }
 }

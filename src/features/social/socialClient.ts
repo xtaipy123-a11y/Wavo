@@ -21,6 +21,7 @@ export interface SharedPlaylist {
   title: string;
   description?: string;
   tracks: ApiTrack[];
+  source?: { type: "album" | "playlist"; id: string };
 }
 
 export interface SocialMessage {
@@ -76,6 +77,12 @@ export function parseSharedPlaylist(value: unknown): SharedPlaylist | null {
   return {
     title: source.title.trim(),
     ...(typeof source.description === "string" ? { description: source.description.slice(0, 2000) } : {}),
+    ...(source.source && typeof source.source === "object" && !Array.isArray(source.source) &&
+      ((source.source as Record<string, unknown>).type === "album" || (source.source as Record<string, unknown>).type === "playlist") &&
+      typeof (source.source as Record<string, unknown>).id === "string" &&
+      String((source.source as Record<string, unknown>).id).trim().length > 0 &&
+      String((source.source as Record<string, unknown>).id).length <= 500
+      ? { source: { type: (source.source as { type: "album" | "playlist" }).type, id: (source.source as { id: string }).id } } : {}),
     tracks,
   };
 }

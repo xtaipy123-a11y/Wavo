@@ -51,6 +51,7 @@
       "home": "Главная",
       "search": "Поиск",
       "library": "Библиотека",
+      "downloads": "Загрузки",
       "settings": "Настройки"
     },
     "loading": "Загрузка",
@@ -1030,7 +1031,7 @@
     "downloading_title": "Загрузка обновления…",
     "downloaded_title": "Обновление загружено",
     "downloaded_desc": "Перезапустите Wavo для установки версии {version}.",
-    "install_button": "Установить",
+    "install_button": "Перезапустить",
     "error_title": "Ошибка обновления"
   }
 }

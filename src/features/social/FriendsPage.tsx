@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
-import { LuCheck, LuDownload, LuMusic2, LuSearch, LuSend, LuUserPlus, LuUsers, LuX } from "react-icons/lu";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { LuArrowLeft, LuCheck, LuDownload, LuMusic2, LuPaperclip, LuSearch, LuSend, LuUserPlus, LuUsers, LuX } from "react-icons/lu";
 import { api } from "@/shared/api";
 import { getSupabaseClient } from "@/shared/supabase/client";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -8,6 +8,7 @@ import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { parseSharedPlaylist, socialClient, type Friendship, type SocialMessage, type SocialProfile } from "./socialClient";
 import ListeningPanel from "./ListeningPanel";
+import "./SocialLayout.css";
 
 const copy = {
   de: {
@@ -42,7 +43,11 @@ export default function FriendsPage() {
   const me = useAuthStore((state) => state.user?.id);
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const sharePlaylistId = params.get("sharePlaylist");
+  const shareCollectionType = params.get("shareCollection") === "album" ? "album" : params.get("shareCollection") === "playlist" ? "playlist" : null;
+  const shareCollectionId = params.get("shareId");
+  const hasShare = Boolean(sharePlaylistId || (shareCollectionType && shareCollectionId));
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<SocialProfile[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
@@ -54,7 +59,11 @@ export default function FriendsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [shareTitle, setShareTitle] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentSearch, setAttachmentSearch] = useState("");
+  const [ownPlaylists, setOwnPlaylists] = useState<{ id: string; title: string }[]>([]);
+  const [catalogCollections, setCatalogCollections] = useState<{ id: string; title: string; type: "album" | "playlist" }[]>([]);
+  const messagesRef = useRef<HTMLDivElement>(null);
 
   const loadFriends = useCallback(async () => {
     try {
@@ -110,14 +119,43 @@ export default function FriendsPage() {
     return () => { window.clearInterval(timer); void supabase.removeChannel(channel); };
   }, [selectedId, me, loadMessages]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages.length, selectedId]);
+  useEffect(() => {
+    const list = messagesRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [messages.length, selectedId]);
 
   useEffect(() => {
-    if (!sharePlaylistId) { setShareTitle(""); return; }
+    if (!hasShare) { setShareTitle(""); return; }
     let alive = true;
-    void api.getUserPlaylist(sharePlaylistId).then(({ playlist }) => { if (alive) setShareTitle(playlist.title); }).catch((cause) => { if (alive) setError(errorText(cause, c.setupMissing, c.unknownError)); });
+    const request = sharePlaylistId ? api.getUserPlaylist(sharePlaylistId).then(({ playlist }) => playlist.title)
+      : shareCollectionType === "album" ? api.getAlbum(shareCollectionId!).then((album) => album.title)
+      : api.getPlaylist(shareCollectionId!).then((playlist) => playlist.title);
+    void request.then((title) => { if (alive) setShareTitle(title); }).catch((cause) => { if (alive) setError(errorText(cause, c.setupMissing, c.unknownError)); });
     return () => { alive = false; };
-  }, [sharePlaylistId, c.setupMissing, c.unknownError]);
+  }, [sharePlaylistId, shareCollectionType, shareCollectionId, hasShare, c.setupMissing, c.unknownError]);
+
+  useEffect(() => {
+    if (!attachmentOpen) return;
+    let active = true;
+    void api.listPlaylists().then(({ items }) => {
+      if (active) setOwnPlaylists(items.map((item) => ({ id: item.id, title: item.title })));
+    }).catch((cause) => { if (active) setError(errorText(cause, c.setupMissing, c.unknownError)); });
+    return () => { active = false; };
+  }, [attachmentOpen, c.setupMissing, c.unknownError]);
+
+  useEffect(() => {
+    if (!attachmentOpen || attachmentSearch.trim().length < 2) { setCatalogCollections([]); return; }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void Promise.all([api.search(attachmentSearch.trim(), "album"), api.search(attachmentSearch.trim(), "playlist")])
+        .then(([albums, playlists]) => {
+          if (active) setCatalogCollections([...albums.items, ...playlists.items]
+            .filter((item): item is Extract<typeof item, { type: "album" | "playlist" }> => item.type === "album" || item.type === "playlist")
+            .slice(0, 12).map((item) => ({ id: item.id, title: item.title, type: item.type })));
+        }).catch((cause) => { if (active) setError(errorText(cause, c.setupMissing, c.unknownError)); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [attachmentOpen, attachmentSearch, c.setupMissing, c.unknownError]);
 
   const accepted = useMemo(() => friendships.filter((row) => row.status === "accepted"), [friendships]);
   const incoming = useMemo(() => friendships.filter((row) => row.status === "pending" && row.addressee_id === me), [friendships, me]);
@@ -133,7 +171,7 @@ export default function FriendsPage() {
 
   const send = async (event: FormEvent) => {
     event.preventDefault();
-    if (!selectedId || (!draft.trim() && !sharePlaylistId) || busy) return;
+    if (!selectedId || (!draft.trim() && !hasShare) || busy) return;
     setBusy(true);
     try {
       let playlist;
@@ -145,10 +183,15 @@ export default function FriendsPage() {
           tracks: detail.items.map((item) => item.track),
         });
         if (!playlist) throw new Error("Die Playlist ist zu groß oder enthält ungültige Titel.");
+      } else if (shareCollectionType && shareCollectionId) {
+        const collection = shareCollectionType === "album" ? await api.getAlbum(shareCollectionId) : await api.getPlaylist(shareCollectionId);
+        playlist = parseSharedPlaylist({ title: collection.title, tracks: collection.tracks,
+          source: { type: shareCollectionType, id: shareCollectionId } });
+        if (!playlist) throw new Error("Diese Sammlung kann nicht geteilt werden.");
       }
       await socialClient.sendMessage(selectedId, draft, playlist ?? undefined);
       setDraft("");
-      if (sharePlaylistId) setParams({}, { replace: true });
+      if (hasShare) setParams({}, { replace: true });
       await loadMessages(selectedId);
       toast(c.messageSent, "checkmark");
     } catch (cause) { setError(errorText(cause, c.setupMissing, c.unknownError)); }
@@ -166,11 +209,18 @@ export default function FriendsPage() {
     });
   };
 
+  const chooseAttachment = (kind: "mine" | "album" | "playlist", id: string) => {
+    setParams(kind === "mine" ? { sharePlaylist: id } : { shareCollection: kind, shareId: id });
+    setAttachmentOpen(false);
+    setAttachmentSearch("");
+  };
+
   const personId = (row: Friendship) => row.requester_id === me ? row.addressee_id : row.requester_id;
   const existingIds = new Set(friendships.flatMap((row) => [row.requester_id, row.addressee_id]));
+  const chatIsOpen = Boolean(selectedId && accepted.some((row) => personId(row) === selectedId));
 
   return (
-    <div className="min-h-full px-[24px] py-[28px] text-text-primary" data-no-window-drag>
+    <div className="wavo-friends-page min-h-full text-text-primary" data-no-window-drag>
       <div className="mx-auto max-w-[1250px]">
         <div className="mb-[24px] flex items-center gap-[14px]">
           <div className="flex h-[44px] w-[44px] items-center justify-center rounded-[14px] bg-accent/20 text-accent"><LuUsers size={23} /></div>
@@ -178,27 +228,29 @@ export default function FriendsPage() {
         </div>
         {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{error}</div>}
         <ListeningPanel friends={accepted.map((row) => { const id = personId(row); return { id, profile: profiles[id] }; })} />
-        <div className="grid min-h-[580px] grid-cols-1 gap-[12px] lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70 p-[14px]">
+        <div className="wavo-social-layout" data-chat-open={chatIsOpen}>
+          <aside className="wavo-social-people rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70 p-[14px]">
+            <h2 className="mb-[12px] mt-[2px] text-[14px] font-semibold">{locale === "de" ? "Unterhaltungen" : "Conversations"}</h2>
             <label className="flex items-center gap-[8px] rounded-[10px] border border-border-alpha-15 bg-bg-primary px-[12px] py-[9px] text-text-tertiary">
               <LuSearch size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={c.search} aria-label={c.search} className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-text-primary outline-none" />
             </label>
             {search.trim() && <div className="mt-[14px]"><p className="mb-[7px] text-[11px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.search}</p>{results.length ? results.map((person) => <div key={person.user_id} className="flex items-center gap-[9px] rounded-[9px] px-[5px] py-[8px]"><Avatar profile={person} /><div className="min-w-0 flex-1"><p className="m-0 truncate text-[13px] font-semibold">{person.display_name}</p><p className="m-0 truncate text-[11px] text-text-tertiary">@{person.username}</p></div><button type="button" disabled={busy || existingIds.has(person.user_id)} onClick={() => void act(() => socialClient.requestFriend(person.user_id))} aria-label={`${c.add}: ${person.username}`} title={existingIds.has(person.user_id) ? c.pending : c.add} className="rounded-[8px] p-[7px] text-text-secondary hover:bg-white/10 disabled:opacity-35"><LuUserPlus size={17} /></button></div>) : <p className="text-[12px] text-text-tertiary">{c.searchEmpty}</p>}</div>}
             {incoming.length > 0 && <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.requests} · {incoming.length}</h2>{incoming.map((row) => <div key={row.id} className="flex items-center gap-[9px] py-[7px]"><Avatar profile={profiles[row.requester_id]} /><span className="min-w-0 flex-1 truncate text-[13px]">{profiles[row.requester_id]?.display_name ?? "Wavo"}</span><button type="button" title={c.accept} disabled={busy} onClick={() => void act(() => socialClient.acceptFriend(row.id))} className="rounded-[7px] p-[6px] text-green-400 hover:bg-white/10"><LuCheck size={17} /></button><button type="button" title={c.decline} disabled={busy} onClick={() => void act(() => socialClient.removeFriend(row.id))} className="rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10"><LuX size={17} /></button></div>)}</section>}
-            <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.friends} · {accepted.length}</h2>{loading ? <p className="text-[12px] text-text-tertiary">…</p> : accepted.length ? accepted.map((row) => { const id = personId(row); const profile = profiles[id]; return <button key={row.id} type="button" onClick={() => setSelectedId(id)} className={`flex w-full items-center gap-[10px] rounded-[10px] px-[8px] py-[9px] text-left hover:bg-white/8 ${selectedId === id ? "bg-white/10" : ""}`}><Avatar profile={profile} /><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold">{profile?.display_name ?? "Wavo"}</span><span className="block truncate text-[11px] text-text-tertiary">@{profile?.username ?? "…"}</span></span></button>; }) : <p className="text-[12px] leading-[1.5] text-text-tertiary">{c.noFriends}</p>}</section>
+            <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.friends} · {accepted.length}</h2>{loading ? <p className="text-[12px] text-text-tertiary">…</p> : accepted.length ? accepted.map((row) => { const id = personId(row); const profile = profiles[id]; return <button key={row.id} type="button" aria-pressed={selectedId === id} onClick={() => setSelectedId(id)} className={`flex w-full items-center gap-[10px] rounded-[10px] border px-[8px] py-[9px] text-left transition-colors hover:bg-white/8 ${selectedId === id ? "border-accent/40 bg-accent/15" : "border-transparent"}`}><Avatar profile={profile} /><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold">{profile?.display_name ?? "Wavo"}</span><span className="block truncate text-[11px] text-text-tertiary">@{profile?.username ?? "…"}</span></span></button>; }) : <p className="text-[12px] leading-[1.5] text-text-tertiary">{c.noFriends}</p>}</section>
+            {selectedId && accepted.some((row) => personId(row) === selectedId) && <button type="button" disabled={busy} onClick={() => { if (window.confirm(locale === "de" ? "Freund entfernen und Chat schließen?" : "Remove friend and close chat?")) void act(async () => { const row = accepted.find((item) => personId(item) === selectedId); if (row) await socialClient.removeFriend(row.id); setSelectedId(null); }); }} className="mt-[12px] text-[11px] text-text-tertiary hover:text-red-300 disabled:opacity-40">{c.remove}: {profiles[selectedId]?.display_name ?? "Wavo"}</button>}
             {outgoing.length > 0 && <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.sent}</h2>{outgoing.map((row) => <div key={row.id} className="flex items-center gap-[9px] py-[7px]"><Avatar profile={profiles[row.addressee_id]} /><span className="min-w-0 flex-1 truncate text-[12px] text-text-secondary">{profiles[row.addressee_id]?.display_name ?? "Wavo"}</span><button type="button" title={c.remove} disabled={busy} onClick={() => void act(() => socialClient.removeFriend(row.id))} className="p-[5px] text-text-tertiary hover:text-text-primary"><LuX size={15} /></button></div>)}</section>}
           </aside>
-          <section className="flex min-h-[580px] flex-col overflow-hidden rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70">
-            {selectedId && accepted.some((row) => personId(row) === selectedId) ? <>
-              <header className="flex items-center gap-[11px] border-b border-border-alpha-15 px-[18px] py-[13px]"><Avatar profile={selectedProfile} /><div className="min-w-0 flex-1"><h2 className="m-0 truncate text-[15px] font-semibold">{selectedProfile?.display_name ?? "Wavo"}</h2><p className="m-0 text-[11px] text-text-tertiary">@{selectedProfile?.username ?? "…"}</p></div><button type="button" title={c.remove} disabled={busy} onClick={() => void act(async () => { const row = accepted.find((item) => personId(item) === selectedId); if (row) await socialClient.removeFriend(row.id); setSelectedId(null); })} className="p-[6px] text-text-tertiary hover:text-text-primary"><LuX size={17} /></button></header>
-              <div className="flex-1 space-y-[12px] overflow-y-auto px-[18px] py-[20px]" style={{ minHeight: 360, maxHeight: "calc(100vh - 350px)" }}>
+          <section className="wavo-social-chat flex flex-col overflow-hidden rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70">
+            {chatIsOpen ? <>
+              <header className="flex shrink-0 items-center gap-[11px] border-b border-border-alpha-15 px-[18px] py-[13px]"><button type="button" title={locale === "de" ? "Zurück zu Freunden" : "Back to friends"} aria-label={locale === "de" ? "Zurück zu Freunden" : "Back to friends"} onClick={() => setSelectedId(null)} className="wavo-social-back rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10 hover:text-text-primary"><LuArrowLeft size={18} /></button><Avatar profile={selectedProfile} /><div className="min-w-0 flex-1"><h2 className="m-0 truncate text-[15px] font-semibold">{selectedProfile?.display_name ?? "Wavo"}</h2><p className="m-0 truncate text-[11px] text-text-tertiary">@{selectedProfile?.username ?? "…"}</p></div><button type="button" title={locale === "de" ? "Chat schließen" : "Close chat"} onClick={() => setSelectedId(null)} className="wavo-social-close rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10 hover:text-text-primary"><LuX size={17} /></button></header>
+              <div ref={messagesRef} className="wavo-social-messages flex-1 space-y-[12px] overflow-y-auto px-[18px] py-[20px]">
                 {!messages.length && <div className="flex h-full min-h-[260px] items-center justify-center text-center text-[13px] text-text-tertiary">{c.chatEmpty}</div>}
-                {messages.map((message) => { const mine = message.sender_id === me; const snapshot = parseSharedPlaylist(message.playlist_snapshot); return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[80%] rounded-[14px] px-[13px] py-[10px] text-[13px] leading-[1.5] ${mine ? "bg-accent/25" : "bg-bg-primary"}`}>{message.body && <p className="m-0 whitespace-pre-wrap break-words">{message.body}</p>}{snapshot && <div className={`${message.body ? "mt-[9px]" : ""} rounded-[10px] border border-border-alpha-15 bg-bg-secondary/70 p-[11px]`}><div className="flex items-center gap-[9px]"><LuMusic2 size={19} className="text-accent" /><div className="min-w-0"><p className="m-0 truncate font-semibold">{snapshot.title}</p><p className="m-0 text-[11px] text-text-tertiary">{snapshot.tracks.length} Tracks</p></div></div>{!mine && <button type="button" disabled={busy} onClick={() => void importPlaylist(message)} className="mt-[10px] flex items-center gap-[6px] rounded-[8px] bg-accent px-[10px] py-[6px] text-[11px] font-semibold text-white hover:opacity-90"><LuDownload size={14} />{c.import}</button>}</div>}<time className="mt-[6px] block text-right text-[10px] text-text-tertiary">{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time></div></div>; })}
-                <div ref={endRef} />
+                {messages.map((message) => { const mine = message.sender_id === me; const snapshot = parseSharedPlaylist(message.playlist_snapshot); return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[min(80%,420px)] rounded-[14px] px-[13px] py-[10px] text-[13px] leading-[1.5] ${mine ? "bg-accent/25" : "bg-bg-primary"}`}>{message.body && <p className="m-0 whitespace-pre-wrap break-words">{message.body}</p>}{snapshot && <div className={`${message.body ? "mt-[9px]" : ""} rounded-[10px] border border-border-alpha-15 bg-bg-secondary/70 p-[11px]`}><div className="flex items-center gap-[9px]"><LuMusic2 size={19} className="text-accent" /><div className="min-w-0"><p className="m-0 truncate font-semibold">{snapshot.title}</p><p className="m-0 text-[11px] text-text-tertiary">{snapshot.source?.type === "album" ? (locale === "de" ? "Album / EP" : "Album / EP") : c.share} · {snapshot.tracks.length} Tracks</p></div></div><div className="mt-[10px] flex flex-wrap gap-[7px]">{snapshot.source && <button type="button" onClick={() => navigate(`/collection?type=${snapshot.source!.type}&id=${encodeURIComponent(snapshot.source!.id)}`)} className="rounded-[8px] border border-border-alpha-15 px-[10px] py-[6px] text-[11px] font-semibold hover:bg-white/10">{locale === "de" ? "Öffnen" : "Open"}</button>}{!mine && <button type="button" disabled={busy} onClick={() => void importPlaylist(message)} className="flex items-center gap-[6px] rounded-[8px] bg-accent px-[10px] py-[6px] text-[11px] font-semibold text-white hover:opacity-90"><LuDownload size={14} />{c.import}</button>}</div></div>}<time className="mt-[6px] block text-right text-[10px] text-text-tertiary">{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time></div></div>; })}
               </div>
-              {sharePlaylistId && <div className="flex items-center gap-[9px] border-t border-border-alpha-15 bg-accent/10 px-[16px] py-[10px] text-[12px]"><LuMusic2 size={17} className="text-accent" /><span className="min-w-0 flex-1 truncate">{c.share}: {shareTitle || "…"}</span><button type="button" title={c.remove} onClick={() => setParams({}, { replace: true })}><LuX size={15} /></button></div>}
-              <form onSubmit={(event) => void send(event)} className="flex items-center gap-[9px] border-t border-border-alpha-15 p-[13px]"><input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={4000} placeholder={c.message} aria-label={c.message} className="min-w-0 flex-1 rounded-[10px] border border-border-alpha-15 bg-bg-primary px-[13px] py-[10px] text-[13px] text-text-primary outline-none focus:border-accent" /><button type="submit" disabled={busy || (!draft.trim() && !sharePlaylistId)} title={c.send} className="flex h-[37px] w-[37px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white hover:opacity-90 disabled:opacity-40"><LuSend size={17} /></button></form>
-            </> : <div className="flex flex-1 flex-col items-center justify-center gap-[12px] px-[20px] text-center text-text-tertiary"><LuUsers size={40} className="opacity-40" /><p className="m-0 text-[14px]">{sharePlaylistId ? c.shareHint : c.select}</p></div>}
+              {attachmentOpen && <div className="wavo-social-attachment shrink-0 border-t border-border-alpha-15 bg-bg-primary/80 p-[12px]"><div className="flex items-center gap-[9px]"><h3 className="m-0 flex-1 text-[12px] font-semibold">{locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"}</h3><button type="button" onClick={() => setAttachmentOpen(false)} aria-label={locale === "de" ? "Schließen" : "Close"} className="rounded p-[4px] hover:bg-white/10"><LuX size={14} /></button></div><label className="mt-[9px] flex items-center gap-[7px] rounded-[8px] border border-border-alpha-15 bg-bg-secondary px-[9px] py-[7px]"><LuSearch size={14} className="text-text-tertiary" /><input value={attachmentSearch} onChange={(event) => setAttachmentSearch(event.target.value)} placeholder={locale === "de" ? "Album, EP oder Playlist suchen …" : "Search albums, EPs or playlists …"} className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label><div className="mt-[8px] max-h-[190px] overflow-y-auto"><p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Deine Playlists" : "Your playlists"}</p>{ownPlaylists.filter((item) => item.title.toLowerCase().includes(attachmentSearch.toLowerCase())).slice(0, 8).map((item) => <button key={`mine-${item.id}`} type="button" onClick={() => chooseAttachment("mine", item.id)} className="block w-full truncate rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10">{item.title}</button>)}{catalogCollections.length > 0 && <p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Katalog" : "Catalog"}</p>}{catalogCollections.map((item) => <button key={`${item.type}-${item.id}`} type="button" onClick={() => chooseAttachment(item.type, item.id)} className="flex w-full items-center gap-[8px] rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10"><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-[10px] text-text-tertiary">{item.type === "album" ? "Album / EP" : "Playlist"}</span></button>)}</div></div>}
+              {hasShare && <div className="flex shrink-0 items-center gap-[9px] border-t border-border-alpha-15 bg-accent/10 px-[16px] py-[10px] text-[12px]"><LuMusic2 size={17} className="text-accent" /><span className="min-w-0 flex-1 truncate">{c.share}: {shareTitle || "…"}</span><button type="button" title={c.remove} onClick={() => setParams({}, { replace: true })}><LuX size={15} /></button></div>}
+              <form onSubmit={(event) => void send(event)} className="flex shrink-0 items-center gap-[9px] border-t border-border-alpha-15 p-[13px]"><button type="button" title={locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"} aria-label={locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"} onClick={() => setAttachmentOpen((value) => !value)} className={`flex h-[37px] w-[37px] shrink-0 items-center justify-center rounded-[9px] border border-border-alpha-15 hover:bg-white/10 ${attachmentOpen ? "text-accent" : "text-text-secondary"}`}><LuPaperclip size={16} /></button><input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={4000} placeholder={c.message} aria-label={c.message} className="min-w-0 flex-1 rounded-[10px] border border-border-alpha-15 bg-bg-primary px-[13px] py-[10px] text-[13px] text-text-primary outline-none focus:border-accent" /><button type="submit" disabled={busy || (!draft.trim() && !hasShare)} title={c.send} className="flex h-[37px] w-[37px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white hover:opacity-90 disabled:opacity-40"><LuSend size={17} /></button></form>
+            </> : <div className="flex flex-1 flex-col items-center justify-center gap-[12px] px-[20px] text-center text-text-tertiary"><LuUsers size={40} className="opacity-40" /><p className="m-0 text-[14px]">{hasShare ? c.shareHint : c.select}</p></div>}
           </section>
         </div>
       </div>

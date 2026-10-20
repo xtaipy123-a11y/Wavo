@@ -5,7 +5,7 @@ import { useAuthStore } from "@/features/auth/store/authStore";
 import { playerEngine } from "@/features/player/engine/playerEngine";
 import { usePlayerStore } from "@/features/player/store/playerStore";
 import { listeningClient } from "./listeningClient";
-import { expectedListeningPosition, isListeningRoomFresh, listeningError, useListeningStore } from "./listeningStore";
+import { canRequestListeningAction, expectedListeningPosition, isListeningRoomFresh, listeningError, upcomingListeningQueue, useListeningStore } from "./listeningStore";
 
 export default function ListeningSync() {
   const userId = useAuthStore((state) => state.user?.id);
@@ -21,7 +21,7 @@ export default function ListeningSync() {
       .on("postgres_changes", { event: "*", schema: "public", table: "wavo_listening_members" }, refresh)
       .subscribe();
 
-    type Published = { roomId: string; trackId: string | null; isPlaying: boolean; positionMs: number; at: number };
+    type Published = { roomId: string; trackId: string | null; isPlaying: boolean; positionMs: number; queueKey: string; at: number };
     let published: Published | null = null;
     let publishing = false;
     let pending = false;
@@ -34,15 +34,17 @@ export default function ListeningSync() {
       const trackId = player.currentTrack?.id ?? null;
       const isPlaying = Boolean(trackId && (player.status === "playing" || player.status === "loading"));
       const positionMs = trackId ? player.positionMs : 0;
+      const queue = upcomingListeningQueue(player);
+      const queueKey = JSON.stringify(queue);
       const expected = published ? published.positionMs + (published.isPlaying ? Date.now() - published.at : 0) : 0;
       const changed = !published || published.roomId !== room.id || published.trackId !== trackId ||
-        published.isPlaying !== isPlaying || Math.abs(positionMs - expected) > 1600;
+        published.isPlaying !== isPlaying || published.queueKey !== queueKey || Math.abs(positionMs - expected) > 1600;
       if (!changed && !(heartbeat && isPlaying)) return;
       if (publishing) { pending = true; return; }
       publishing = true;
       try {
-        await listeningClient.publish(room.id, trackId, player.currentTrack?.title ?? null, positionMs, isPlaying);
-        published = { roomId: room.id, trackId, isPlaying, positionMs, at: Date.now() };
+        await listeningClient.publish(room.id, trackId, player.currentTrack?.title ?? null, positionMs, isPlaying, queue);
+        published = { roomId: room.id, trackId, isPlaying, positionMs, queueKey, at: Date.now() };
       } catch (cause) {
         useListeningStore.setState({ error: listeningError(cause) });
       } finally {
@@ -56,6 +58,38 @@ export default function ListeningSync() {
     };
     const unsubscribe = usePlayerStore.subscribe(onPlayerChange);
     const heartbeat = window.setInterval(() => void publish(true), 3000);
+    let processing = false;
+    const processCommands = async () => {
+      const room = useListeningStore.getState().room;
+      if (processing || !room || room.host_id !== userId || !room.active) return;
+      processing = true;
+      try {
+        for (const command of await listeningClient.pendingCommands(room.id)) {
+          if (!await listeningClient.claimCommand(command.id)) continue;
+          const member = useListeningStore.getState().members.find((entry) => entry.user_id === command.actor_id && entry.status === "active");
+          if (command.kind === "add" && canRequestListeningAction(room, member, command.actor_id, "add") && command.track_id) {
+            const track = toClientTrack(await api.getTrack(command.track_id));
+            const player = usePlayerStore.getState();
+            if (player.currentTrack) playerEngine.addToQueue(track);
+            else await playerEngine.playTrack(track, [track], `listening:${room.id}`);
+          } else if (command.kind === "skip" && canRequestListeningAction(room, member, command.actor_id, "skip")) {
+            await playerEngine.skipNext();
+          } else if (command.kind === "move" && canRequestListeningAction(room, member, command.actor_id, "move")) {
+            const player = usePlayerStore.getState();
+            const from = command.from_index ?? -1;
+            const to = command.to_index ?? -1;
+            if (from > player.currentIndex && to > player.currentIndex &&
+              from < player.queue.length && to < player.queue.length) playerEngine.reorderQueue(from, to);
+          }
+        }
+      } catch (cause) {
+        useListeningStore.setState({ error: listeningError(cause) });
+      } finally {
+        processing = false;
+      }
+    };
+    const commandPoll = window.setInterval(() => void processCommands(), 1600);
+    void processCommands();
     let loadingTrack: string | null = null;
 
     const syncGuest = async () => {
@@ -97,6 +131,7 @@ export default function ListeningSync() {
     return () => {
       window.clearInterval(poll);
       window.clearInterval(heartbeat);
+      window.clearInterval(commandPoll);
       window.clearInterval(follower);
       window.clearTimeout(debounce);
       unsubscribe();

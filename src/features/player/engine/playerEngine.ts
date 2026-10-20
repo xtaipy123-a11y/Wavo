@@ -1029,6 +1029,8 @@ class PlayerEngine {
       clearTimeout(this.radioAppendTimeout);
       this.radioAppendTimeout = null;
     }
+    if (usePlayerStore.getState().repeat === "all") return;
+    if (usePlayerStore.getState().playbackContext === "downloads" || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
 
     this.radioAppendTimeout = setTimeout(() => {
       void this.appendSimilarTracksForSeed(session, seedTrackId);
@@ -1040,7 +1042,7 @@ class PlayerEngine {
     seedTrackId: string,
   ): Promise<void> {
     const currentState = usePlayerStore.getState();
-    if (!currentState.autoplaySimilar) return;
+    if (!currentState.autoplaySimilar || currentState.repeat === "all") return;
 
     const historyIds = currentState.queue.map((track) => track.id);
     // keep paginating the same wave instance across queue generations
@@ -1066,7 +1068,7 @@ class PlayerEngine {
 
     const state = usePlayerStore.getState();
     if (session !== this.sessionId) return;
-    if (!state.autoplaySimilar) return;
+    if (!state.autoplaySimilar || state.repeat === "all") return;
 
     const queuedIds = new Set(state.queue.map((track) => track.id));
     const additions = items

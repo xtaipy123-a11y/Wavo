@@ -1,6 +1,6 @@
 {
   "name": "@wavo/client",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "type": "module",
   "private": true,
   "description": "Wavo Music Player",
@@ -33,6 +33,9 @@
       "provider": "github",
       "owner": "xtaipy123-a11y",
       "repo": "Wavo"
+    },
+    "releaseInfo": {
+      "releaseNotesFile": "RELEASE_NOTES.md"
     },
     "protocols": [
       {

@@ -16,7 +16,7 @@ import {
   ShareForwardLine,
 } from "@mingcute/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { LuPencil, LuTrash2, LuText, LuShuffle } from "react-icons/lu";
+import { LuPencil, LuTrash2, LuText, LuShuffle, LuRepeat } from "react-icons/lu";
 import Button from "@/shared/ui/Button";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
@@ -29,6 +29,7 @@ import {
 } from "../hooks";
 import { useListReorder } from "@/shared/hooks";
 import { playerEngine } from "@/features/player";
+import { usePlayerStore } from "@/features/player/store/playerStore";
 import type { Track } from "@/shared/types";
 import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
@@ -102,7 +103,7 @@ function LibraryPlaylistContent() {
   const isLikesMode = id === "likes";
   const decodedId = id ? decodeURIComponent(id) : null;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const hasCustomBg = useIsContentTransparent();
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -189,6 +190,8 @@ function LibraryPlaylistContent() {
   const currentTracks = useMemo(() => {
     return optimisticTracks ?? viewData?.tracks ?? [];
   }, [optimisticTracks, viewData?.tracks]);
+  const repeatAll = usePlayerStore((state) => state.repeat === "all" && state.playbackContext === (decodedId ? `playlist:${decodedId}` : viewData?.title));
+  const playlistPlaying = usePlayerStore((state) => state.playbackContext === (decodedId ? `playlist:${decodedId}` : viewData?.title) && state.currentTrack !== null);
 
   const handlePlayAll = useCallback(() => {
     if (!currentTracks.length || !viewData) return;
@@ -704,6 +707,18 @@ function LibraryPlaylistContent() {
                         >
                           <LuShuffle size={16} />
                         </Button>
+
+                        <Button
+                          variant={hasCustomBg ? "glass-action" : "outline"}
+                          onClick={() => {
+                            if (repeatAll) playerEngine.setRepeat("off");
+                            else { if (!playlistPlaying) handlePlayAll(); playerEngine.setRepeat("all"); }
+                          }}
+                          disabled={currentTracks.length === 0}
+                          aria-label={repeatAll ? (locale === "de" ? "Playlist-Wiederholung ausschalten" : "Turn playlist repeat off") : (locale === "de" ? "Playlist wiederholen" : "Repeat playlist")}
+                          title={repeatAll ? (locale === "de" ? "Playlist-Wiederholung ausschalten" : "Turn playlist repeat off") : (locale === "de" ? "Playlist wiederholen" : "Repeat playlist")}
+                          className={`!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center ${repeatAll ? "!text-accent" : "text-text-primary"}`}
+                        ><LuRepeat size={16} /></Button>
 
                         {!isLikesMode && (
                           <DropdownMenu

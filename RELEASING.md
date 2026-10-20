@@ -4,17 +4,13 @@ Der Ordner `D:\Wavo` ist als Git-Repository eingerichtet. `origin` zeigt auf `ht
 
 ## Updates in Wavo
 
-In der installierten App oben rechts **Nach Updates suchen** anklicken. Nach dem Download wechselt dieselbe Schaltfläche zu **Installieren**. Zusätzlich gibt es den Weg **Zahnrad unten links → Updates und Version → Nach Updates suchen**. In älteren Versionen ohne die Schaltfläche oben rechts funktioniert dieser Weg über das Zahnrad bereits.
+In der installierten App oben rechts **Nach Updates suchen** anklicken. Nach dem Download wechselt dieselbe Schaltfläche zu **Jetzt neu starten**. Wavo installiert das Update dann im Hintergrund und startet die neue Version. Beim ersten Start zeigt Wavo die Änderungen aus `RELEASE_NOTES.md`. Zusätzlich gibt es den Weg **Zahnrad unten links → Updates und Version → Nach Updates suchen**.
 
 Die App liest die öffentliche GitHub-Releasequelle über `electron-updater`. Ein neuer Tag allein genügt nicht; der Workflow muss fertig sein und einen veröffentlichten Release mit allen drei Dateien erzeugen. Der Updater funktioniert nur in einer installierten App mit eingebettetem `resources/app-update.yml`, nicht im Vite-Browser oder in der Entwicklungs-App.
 
 ## Nächste Version veröffentlichen
 
-`v0.1.44` enthält die sichtbare Update-Schaltfläche. Den vorbereiteten Commit mit `git push origin main` hochladen, danach mit `git push origin v0.1.44` den Release-Workflow starten. Unter **Actions** den erfolgreichen Lauf und unter **Releases** den Installer, die `.exe.blockmap` und `latest.yml` prüfen. Lokale Installer aus `corepack pnpm run release:win` erzeugen keinen GitHub Release.
-
-Für `v0.1.45` zuerst `supabase/migrations/202610190002_wavo_listening_rooms.sql` im SQL Editor des Wavo-Supabase-Projekts ausführen. Danach den Code committen, `main` pushen und den Tag `v0.1.45` auf genau diesen Commit setzen und pushen. So erhalten die installierten Clients die gemeinsame Hörsession über den Auto-Updater.
-
-Für spätere Versionen `package.json` erhöhen, committen und pushen, danach den dazu passenden Tag `v<version>` pushen.
+Die nächste vorbereitete Version ist `0.1.47`. Vor jedem Release `package.json`, `src/shared/config/version.ts` und `RELEASE_NOTES.md` aktualisieren. Danach die Änderungen committen und `main` pushen; den Tag `v<version>` auf denselben Commit setzen und pushen. Der Workflow veröffentlicht den Installer, die `.exe.blockmap`, `latest.yml` und die Versionsnotizen. Unter **Actions** den erfolgreichen Lauf und unter **Releases** alle Dateien prüfen. Ein lokaler Build mit `corepack pnpm run release:win` veröffentlicht nichts auf GitHub.
 
 ## Freunde und Nachrichten
 

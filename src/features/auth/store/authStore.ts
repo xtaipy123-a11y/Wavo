@@ -16,8 +16,16 @@ export type AuthState = {
 };
 
 let listening = false;
+let signingOut = false;
 
 function syncSession(value: Parameters<typeof toAuthTokens>[0] | null) {
+  if (!value && !signingOut && typeof navigator !== "undefined" && navigator.onLine === false) {
+    const cached = getAuthSession();
+    if (cached) {
+      useAuthStore.setState({ status: "authenticated", user: cached.user });
+      return;
+    }
+  }
   const next = value ? toAuthTokens(value) : null;
   setAuthSession(next);
   useAuthStore.setState({
@@ -42,9 +50,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       const cached = getAuthSession();
       const expiry = cached?.expiresAt ? cached.expiresAt * 1000 : 0;
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      const canUseLocalSession = Boolean(cached && (expiry > Date.now() || offline));
       set({
-        status: cached && expiry > Date.now() ? "authenticated" : "anonymous",
-        user: cached && expiry > Date.now() ? cached.user : null,
+        status: canUseLocalSession ? "authenticated" : "anonymous",
+        user: canUseLocalSession ? cached?.user ?? null : null,
       });
     }
   },
@@ -94,8 +104,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       window.wavoElectron?.sendOverlayAction?.({ type: "closeOverlay" });
     } catch {}
     if (window.location.hash.includes("/player")) window.location.hash = "#/";
-    await clearAuthSession();
-    set({ status: "anonymous", user: null });
+    signingOut = true;
+    try {
+      await clearAuthSession();
+    } finally {
+      set({ status: "anonymous", user: null });
+      signingOut = false;
+    }
     window.dispatchEvent(new Event("library:changed"));
   },
 }));

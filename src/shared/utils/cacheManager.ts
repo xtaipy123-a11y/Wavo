@@ -368,13 +368,14 @@ export async function clearStorageCategories(categoryIds: StorageCategoryId[]): 
     set.has("audio") && set.has("covers") && set.has("lyrics") && set.has("metadata");
 
   if (set.has("audio")) {
+    const hasDownloads = (await wavoDb.getPinnedAudioRecords()).length > 0;
     audioCache.revokeAll();
-    await wavoDb.clearStore("audio");
+    await wavoDb.clearUnpinnedAudio();
     await wavoDb.clearStore("tracks");
-    if (isAllCategories) {
+    if (isAllCategories && !hasDownloads) {
       await wavoDb.close();
     }
-    if (typeof window !== "undefined" && window.wavoElectron?.clearAudioCache) {
+    if (!hasDownloads && typeof window !== "undefined" && window.wavoElectron?.clearAudioCache) {
       await window.wavoElectron.clearAudioCache(isAllCategories);
     }
   }

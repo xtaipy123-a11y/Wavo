@@ -69,6 +69,17 @@ let mainWindow: BrowserWindow | null = null;
 let touchBarManager: TouchBarManager | null = null;
 let overlayManager: OverlayManager | null = null;
 let bundleManager: BundleManager | null = null;
+const postUpdateInfoPath = () => path.join(app.getPath("userData"), "post-update.json");
+
+function releaseNotesText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    const notes = value.map((entry) => entry && typeof entry === "object" && "note" in entry ? entry.note : "")
+      .filter((note): note is string => typeof note === "string" && note.trim().length > 0);
+    return notes.join("\n\n") || undefined;
+  }
+  return undefined;
+}
 
 // wavo:// deep link support for local sharing.
 
@@ -95,8 +106,8 @@ function flushPendingDeeplink() {
 
 const DEFAULT_WINDOW_WIDTH = 1200;
 const DEFAULT_WINDOW_HEIGHT = 780;
-const MIN_WINDOW_WIDTH = 1100;
-const MIN_WINDOW_HEIGHT = 705;
+const MIN_WINDOW_WIDTH = 760;
+const MIN_WINDOW_HEIGHT = 520;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -940,13 +951,15 @@ if (!gotTheLock) {
     autoUpdater.allowDowngrade = false;
     let manualUpdateCheck = false;
     let activeUpdateDownload = false;
+    let pendingReleaseNotes: string | undefined;
 
     autoUpdater.on("update-available", (info) => {
       activeUpdateDownload = true;
+      pendingReleaseNotes = releaseNotesText(info.releaseNotes);
       mainWindow?.webContents.send("updater:update-available", {
         version: info.version,
         releaseDate: info.releaseDate,
-        releaseNotes: typeof info.releaseNotes === "string" ? info.releaseNotes : undefined,
+        releaseNotes: pendingReleaseNotes,
       });
     });
 
@@ -961,6 +974,14 @@ if (!gotTheLock) {
 
     autoUpdater.on("update-downloaded", (info) => {
       activeUpdateDownload = false;
+      try {
+        fs.writeFileSync(postUpdateInfoPath(), JSON.stringify({
+          version: info.version,
+          releaseNotes: releaseNotesText(info.releaseNotes) ?? pendingReleaseNotes,
+        }), "utf8");
+      } catch (error) {
+        console.warn("Could not save post-update notes:", error);
+      }
       mainWindow?.webContents.send("updater:update-downloaded", {
         version: info.version,
       });
@@ -986,7 +1007,7 @@ if (!gotTheLock) {
         return {
           available: Boolean(result?.updateInfo?.version && result.updateInfo.version !== app.getVersion()),
           version: result?.updateInfo?.version,
-          releaseNotes: typeof result?.updateInfo?.releaseNotes === "string" ? result.updateInfo.releaseNotes : undefined,
+          releaseNotes: releaseNotesText(result?.updateInfo?.releaseNotes),
         };
       } catch (err: any) {
         const message = String(err?.message || "Failed to check for updates");
@@ -1010,9 +1031,17 @@ if (!gotTheLock) {
       }
     });
 
+    ipcMain.handle("updater:get-post-update", () => {
+      if (!app.isPackaged) return null;
+      try {
+        const info = JSON.parse(fs.readFileSync(postUpdateInfoPath(), "utf8")) as { version?: string; releaseNotes?: string };
+        return info.version === app.getVersion() ? info : null;
+      } catch { return null; }
+    });
+
     ipcMain.handle("updater:quit-and-install", () => {
       setImmediate(() => {
-        autoUpdater.quitAndInstall(false, true);
+        autoUpdater.quitAndInstall(true, true);
       });
       return true;
     });

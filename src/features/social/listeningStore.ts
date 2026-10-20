@@ -3,6 +3,26 @@ import { getAuthSession } from "@/shared/api";
 import { usePlayerStore } from "@/features/player/store/playerStore";
 import { listeningClient, type ListeningInvitation, type ListeningMember, type ListeningRoom } from "./listeningClient";
 
+export function upcomingListeningQueue(player: ReturnType<typeof usePlayerStore.getState>) {
+  return player.queue.slice(Math.max(0, player.currentIndex + 1), Math.max(0, player.currentIndex + 1) + 50)
+    .map((track, offset) => ({ index: Math.max(0, player.currentIndex + 1) + offset,
+      id: track.id, title: track.title.slice(0, 200), artists: track.artists.slice(0, 200) }));
+}
+
+export function canRequestListeningAction(
+  room: ListeningRoom | null,
+  member: ListeningMember | undefined,
+  userId: string | undefined,
+  action: "add" | "skip" | "move",
+): boolean {
+  if (!room || !room.active || !userId) return false;
+  if (room.host_id === userId) return true;
+  if (!member || member.user_id !== userId || member.status !== "active") return false;
+  if (action === "add") return member.can_add ?? room.allow_guest_add;
+  if (action === "skip") return member.can_skip ?? room.allow_guest_skip;
+  return member.can_reorder ?? room.allow_guest_reorder;
+}
+
 interface ListeningState {
   room: ListeningRoom | null;
   members: ListeningMember[];
@@ -23,7 +43,7 @@ let refreshSequence = 0;
 export function listeningError(cause: unknown): string {
   if (cause && typeof cause === "object") {
     const issue = cause as { code?: unknown; message?: unknown };
-    if (issue.code === "PGRST205") return "Die Hörsession-Tabellen fehlen in Supabase. Führe die zweite Wavo-SQL-Migration aus.";
+    if (issue.code === "PGRST205" || issue.code === "PGRST204" || issue.code === "42703") return "Das Hörsession-Update fehlt in Supabase. Führe die neueste Wavo-SQL-Migration aus.";
     if (typeof issue.message === "string" && issue.message.trim()) return issue.message;
   }
   return cause instanceof Error ? cause.message : "Die Hörsession ist gerade nicht erreichbar.";
@@ -52,7 +72,7 @@ export const useListeningStore = create<ListeningState>((set, get) => ({
     const player = usePlayerStore.getState();
     await listeningClient.createRoom(
       player.currentTrack?.id ?? null, player.currentTrack?.title ?? null,
-      player.positionMs, player.status === "playing" || player.status === "loading",
+      player.positionMs, player.status === "playing" || player.status === "loading", upcomingListeningQueue(player),
     );
     await get().refresh();
   },

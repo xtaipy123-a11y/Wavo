@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { WifiOffLine, CopyLine, DownloadLine, CloseLine } from "@mingcute/react";
 import Button from "@/shared/ui/Button";
 import { useTranslation } from "@/languages";
@@ -8,6 +9,7 @@ import type { DiagCheck } from "../lib/diagnostics";
 import { DIAG_ENDPOINTS } from "../lib/diagnostics";
 import { buildOfflineDump, copyDump, downloadDump } from "../lib/dump";
 import { isServerOutage } from "../lib/failureKind";
+import { useDownloadStore } from "@/features/downloads/downloadStore";
 
 function StatusDot({ status }: { status: DiagCheck["status"] }) {
   const color =
@@ -32,6 +34,7 @@ export default function ConnectivityWall() {
   const retry = useConnectivityStore((s) => s.retry);
   const reset = useConnectivityStore((s) => s.reset);
   const runDiagnostics = useConnectivityStore((s) => s.runDiagnostics);
+  const downloadedCount = useDownloadStore((s) => s.tracks.length);
 
   const dump = useMemo(
     () =>
@@ -45,6 +48,15 @@ export default function ConnectivityWall() {
   );
 
   if (!visible) return null;
+
+  if (downloadedCount > 0) {
+    return <div className="fixed right-[16px] top-[16px] z-[200] flex max-w-[min(420px,calc(100vw-32px))] items-center gap-[10px] rounded-[12px] border border-border-alpha-15 bg-bg-panel px-[13px] py-[11px] text-[12px] text-text-primary shadow-xl" role="status">
+      <WifiOffLine size={17} className="shrink-0 text-accent" />
+      <span className="min-w-0 flex-1">{t("connectivity.wall_title")}</span>
+      <Link to="/downloads" onClick={reset} className="shrink-0 font-semibold text-accent">Downloads</Link>
+      <button type="button" onClick={reset} aria-label={t("common.close")} className="rounded p-[4px] text-text-tertiary hover:text-text-primary"><CloseLine size={15} /></button>
+    </div>;
+  }
 
   const okCount = checks.filter((c) => c.status === "ok").length;
   const serverOutage = isServerOutage(checks);

@@ -51,6 +51,7 @@
       "home": "Startseite",
       "search": "Suchen",
       "library": "Bibliothek",
+      "downloads": "Downloads",
       "friends": "Freunde",
       "settings": "Einstellungen"
     },
@@ -1013,7 +1014,7 @@
     "downloading_title": "Update wird heruntergeladen…",
     "downloaded_title": "Update heruntergeladen",
     "downloaded_desc": "Starte Wavo neu, um Version {version} zu installieren.",
-    "install_button": "Installieren",
+    "install_button": "Jetzt neu starten",
     "error_title": "Update fehlgeschlagen"
   }
 }

@@ -45,6 +45,7 @@ class AudioCache {
     const oldest = await wavoDb.getOldestAudioRecords();
     for (const item of oldest) {
       if (evictedBytes >= bytesToEvict) break;
+      if (item.pinned) continue;
       const size = item.byteSize || item.blob?.size || 0;
       await this.deleteAudio(item.trackId);
       evictedBytes += size;

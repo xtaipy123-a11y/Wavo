@@ -7,6 +7,8 @@ import {
   LuPlus,
   LuTrash2,
   LuFolderPlus,
+  LuDownload,
+  LuCheck,
 } from "react-icons/lu";
 import type { DropdownMenuItem } from "@/shared/ui/DropdownMenu";
 import { playerEngine } from "../engine/playerEngine";
@@ -19,6 +21,7 @@ import {
 } from "@/features/library";
 import { useTranslation } from "@/languages";
 import { showToast } from "@/shared/ui";
+import { useDownloadStore } from "@/features/downloads/downloadStore";
 
 export interface SongMenuContext {
   id?: string;
@@ -35,7 +38,7 @@ export interface SongMenuContext {
 }
 
 export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const {
     id,
     title,
@@ -56,6 +59,8 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
   const unlikeMutation = useUnlikeTrack();
 
   const liked = useIsTrackLiked(id);
+  const downloaded = useDownloadStore((state) => Boolean(id && state.tracks.some((track) => track.id === id)));
+  const downloadStatus = useDownloadStore((state) => id ? state.statusById[id] : undefined);
 
   const handleLike = useCallback(async () => {
     if (!id) return;
@@ -68,6 +73,36 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
 
   const buildMenu = useCallback((): DropdownMenuItem[] => {
     const isTrack = searchType === "track" || !searchType;
+
+    const offlineItem: DropdownMenuItem = {
+      id: downloaded ? "remove-download" : "download-track",
+      label: downloadStatus === "downloading"
+        ? (locale === "de" ? "Download abbrechen" : "Cancel download")
+        : downloaded
+          ? (locale === "de" ? "Download entfernen" : "Remove download")
+          : (locale === "de" ? "Offline speichern" : "Download for offline"),
+      icon: downloaded ? <LuCheck size={15} /> : <LuDownload size={15} />,
+      disabled: !id || downloadStatus === "removing",
+      onClick: async () => {
+        if (!id) return;
+        const store = useDownloadStore.getState();
+        if (downloadStatus === "downloading") { store.cancel(id); return; }
+        try {
+          if (downloaded) {
+            await store.remove(id);
+            showToast(locale === "de" ? "Download entfernt" : "Download removed", "checkmark");
+          } else {
+            await store.download({ id, title, artists, coverUrl, durationMs: durationMs ?? 0, playCount: 0 });
+            showToast(locale === "de" ? "Offline gespeichert" : "Saved for offline", "checkmark", { description: title });
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          showToast(locale === "de" ? "Download fehlgeschlagen" : "Download failed", "error", {
+            description: error instanceof Error ? error.message : undefined,
+          });
+        }
+      },
+    };
 
     if (isTrack) {
       if (playlistId) {
@@ -123,6 +158,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
               });
             },
           },
+          offlineItem,
           {
             id: liked ? "unlike-track" : "like-track",
             label: liked ? t("common.unlike") : t("common.like"),
@@ -207,6 +243,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
             });
           },
         },
+        offlineItem,
         {
           id: liked ? "unlike-track" : "like-track",
           label: liked ? t("common.unlike") : t("common.like"),
@@ -271,6 +308,9 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     handleLike,
     playlistsData,
     t,
+    locale,
+    downloaded,
+    downloadStatus,
   ]);
 
   return buildMenu();

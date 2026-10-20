@@ -203,7 +203,7 @@ function MiniPlayer({
   embedded = false,
 }: MiniPlayerProps) {
   const player = usePlayerState();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { resolvedTheme } = useTheme();
   const isLight =
     resolvedTheme
@@ -874,14 +874,14 @@ function MiniPlayer({
               <button
                 type="button"
                 aria-label="Repeat"
-                title="Repeat"
+                title={player.repeat === "off" ? (locale === "de" ? "Wiederholung aus" : "Repeat off") : player.repeat === "all" ? (locale === "de" ? "Playlist wiederholen" : "Repeat playlist") : (locale === "de" ? "Song wiederholen" : "Repeat song")}
                 className={`${iconButtonClass} ${
                   player.repeat !== "off" ? "bg-bg-toolbox-active text-text-primary" : ""
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() =>
                   playerEngine.setRepeat(
-                    player.repeat === "one" ? "off" : "one",
+                    player.repeat === "off" ? "all" : player.repeat === "all" ? "one" : "off",
                   )
                 }
               >

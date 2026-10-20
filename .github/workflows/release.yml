@@ -36,6 +36,7 @@ jobs:
       - name: Publish installer and update metadata
         uses: softprops/action-gh-release@v3
         with:
+          body_path: RELEASE_NOTES.md
           files: |
             release/Wavo-Setup-*.exe
             release/Wavo-Setup-*.exe.blockmap

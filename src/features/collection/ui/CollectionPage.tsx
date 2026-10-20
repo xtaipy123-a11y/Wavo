@@ -16,11 +16,12 @@ import {
   More2Line,
   ArrowLeftLine,
 } from "@mingcute/react";
-import { LuShuffle } from "react-icons/lu";
+import { LuRepeat, LuShuffle } from "react-icons/lu";
 import Button from "@/shared/ui/Button";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
 import CoverImage from "@/features/covers/ui/CoverImage";
 import { playerEngine } from "@/features/player";
+import { usePlayerStore } from "@/features/player/store/playerStore";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   useToast,
@@ -42,7 +43,7 @@ function CollectionContent() {
   const typeParam = searchParams.get("type");
   const type = typeParam === "playlist" ? "playlist" : "album";
   const id = searchParams.get("id");
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const navigate = useNavigate();
   const hasCustomBg = useIsContentTransparent();
 
@@ -134,6 +135,8 @@ function CollectionContent() {
   }, [isReady, skeletonExited]);
 
   const playbackContext = id ? `${entityType}:${decodedId}` : (data?.title || null);
+  const repeatAll = usePlayerStore((state) => state.repeat === "all" && state.playbackContext === playbackContext);
+  const collectionPlaying = usePlayerStore((state) => state.playbackContext === playbackContext && state.currentTrack !== null);
 
   const { toast } = useToast();
   const [addedToQueue, setAddedToQueue] = useState(false);
@@ -466,6 +469,18 @@ function CollectionContent() {
                           <LuShuffle size={16} />
                         </Button>
 
+                        <Button
+                          variant={hasCustomBg ? "glass-action" : "outline"}
+                          onClick={() => {
+                            if (repeatAll) playerEngine.setRepeat("off");
+                            else { if (!collectionPlaying) handlePlayAll(); playerEngine.setRepeat("all"); }
+                          }}
+                          disabled={!data || data.tracks.length === 0}
+                          aria-label={repeatAll ? (locale === "de" ? "Wiederholung ausschalten" : "Turn repeat off") : (locale === "de" ? "Sammlung wiederholen" : "Repeat collection")}
+                          title={repeatAll ? (locale === "de" ? "Wiederholung ausschalten" : "Turn repeat off") : (locale === "de" ? "Sammlung wiederholen" : "Repeat collection")}
+                          className={`!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center ${repeatAll ? "!text-accent" : "text-text-primary"}`}
+                        ><LuRepeat size={16} /></Button>
+
                         {!isDailyMix && (
                           <DropdownMenu
                             trigger={
@@ -495,6 +510,12 @@ function CollectionContent() {
                                 icon: <ShareForwardLine size={16} />,
                                 label: t("common.share"),
                                 onClick: handleShare,
+                              },
+                              {
+                                id: "share-friend",
+                                icon: <ShareForwardLine size={16} />,
+                                label: t("common.share") + " · " + (locale === "de" ? "Freunde" : "Friends"),
+                                onClick: () => navigate(`/friends?shareCollection=${entityType}&shareId=${encodeURIComponent(decodedId)}`),
                               },
                             ]}
                           />

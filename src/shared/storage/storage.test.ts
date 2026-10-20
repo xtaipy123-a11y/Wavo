@@ -1,3 +1,4 @@
+import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach } from "vitest";
 import { wavoDb } from "./wavoDb";
 import { audioCache } from "./audioCache";
@@ -224,6 +225,24 @@ describe("wavoDb storage layer", () => {
 
     expect(hasOldest).toBe(false);
     expect(hasNewest).toBe(true);
+  });
+
+  it("keeps offline downloads through cache eviction and ordinary cache clearing", async () => {
+    const track = { id: "offline_song", title: "Saved song", artists: "Artist", coverUrl: "", durationMs: 1000, playCount: 0 };
+    const blob = new Blob(["1234567890".repeat(10)], { type: "audio/ogg" });
+    await wavoDb.pinAudio(track, blob);
+    await wavoDb.putAudio("offline_song", blob, "audio/ogg");
+    await wavoDb.putAudio("temporary_song", blob, "audio/ogg");
+
+    await audioCache.enforceCacheLimit(100);
+    expect((await wavoDb.getAudio("offline_song"))?.pinned).toBe(true);
+    expect(await wavoDb.hasAudio("temporary_song")).toBe(false);
+
+    await wavoDb.putAudio("temporary_song", blob, "audio/ogg");
+    await wavoDb.clearUnpinnedAudio();
+    await wavoDb.close();
+    expect((await wavoDb.getPinnedAudioRecords()).map((item) => item.downloadTrack?.title)).toEqual(["Saved song"]);
+    expect(await wavoDb.hasAudio("temporary_song")).toBe(false);
   });
 
   it("handles getLimitBytes and setLimitBytes with defaults and clamping", async () => {
