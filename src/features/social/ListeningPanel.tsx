@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LuCheck, LuChevronDown, LuChevronUp, LuHeadphones, LuLogOut, LuSearch, LuSkipForward, LuUserPlus, LuX } from "react-icons/lu";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useSearchTracks } from "@/features/search/hooks/useSearchTracks";
@@ -6,6 +6,8 @@ import { useTranslation } from "@/languages";
 import type { SocialProfile } from "./socialClient";
 import { listeningClient, type ListeningRoom } from "./listeningClient";
 import { canRequestListeningAction, listeningError, useListeningStore } from "./listeningStore";
+import { getSupabaseClient } from "@/shared/supabase/client";
+import type { ListeningVote } from "./listeningClient";
 
 interface ListeningPanelProps {
   friends: { id: string; profile?: SocialProfile }[];
@@ -18,6 +20,18 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
   const { room, members, invitations, error, start, invite, join, decline, leave, refresh } = useListeningStore();
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
+  const [votes, setVotes] = useState<ListeningVote[]>([]);
+  useEffect(() => {
+    if (!room?.id) { setVotes([]); return; }
+    let active = true;
+    const refreshVotes = () => { void listeningClient.votes(room.id).then((rows) => { if (active) setVotes(rows); }).catch(() => {}); };
+    refreshVotes();
+    const client = getSupabaseClient();
+    const channel = client.channel(`wavo-votes-${room.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "wavo_listening_votes", filter: `room_id=eq.${room.id}` }, refreshVotes)
+      .subscribe();
+    return () => { active = false; void client.removeChannel(channel); };
+  }, [room?.id]);
   const host = room?.host_id === userId;
   const ownMember = members.find((member) => member.user_id === userId);
   const canAdd = canRequestListeningAction(room, ownMember, userId, "add");
@@ -68,6 +82,19 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
           <div className="rounded-[12px] border border-border-alpha-15 bg-bg-primary/50 p-[12px]">
             <h3 className="m-0 text-[13px] font-semibold">{de ? "Als Nächstes" : "Up next"} <span className="text-text-tertiary">· {queue.length}</span></h3>
             <div className="mt-[8px] max-h-[200px] space-y-[4px] overflow-y-auto">{queue.length ? queue.map((item, i) => <div key={`${item.index}-${item.id}`} className="flex items-center gap-[8px] rounded-[7px] bg-white/[0.04] px-[8px] py-[6px]"><span className="w-[17px] text-[11px] text-text-tertiary">{i + 1}</span><div className="min-w-0 flex-1"><p className="m-0 truncate text-[12px] font-medium">{item.title}</p><p className="m-0 truncate text-[10px] text-text-tertiary">{item.artists}</p></div>{canMove && <div className="flex"><button type="button" disabled={busy || i === 0} onClick={() => request("move", { fromIndex: item.index, toIndex: queue[i - 1].index })} title={de ? "Nach oben" : "Move up"} className="rounded p-[4px] hover:bg-white/10 disabled:opacity-30"><LuChevronUp size={14} /></button><button type="button" disabled={busy || i === queue.length - 1} onClick={() => request("move", { fromIndex: item.index, toIndex: queue[i + 1].index })} title={de ? "Nach unten" : "Move down"} className="rounded p-[4px] hover:bg-white/10 disabled:opacity-30"><LuChevronDown size={14} /></button></div>}</div>) : <p className="m-0 py-[8px] text-[12px] text-text-tertiary">{de ? "Warteschlange leer" : "Queue empty"}</p>}</div>
+            {queue.length > 0 && <div className="mt-[8px] border-t border-border-alpha-15 pt-[7px]">
+              <p className="m-0 text-[10px] text-text-tertiary">{de ? "Stimme für den nächsten Song ab:" : "Vote for the next song:"}</p>
+              <div className="mt-[5px] flex flex-wrap gap-[5px]">{queue.map((item) => {
+                const count = votes.filter((vote) => vote.track_id === item.id).length;
+                const own = votes.some((vote) => vote.track_id === item.id && vote.voter_id === userId);
+                return <button key={item.id} type="button" disabled={busy} onClick={() => void run(async () => {
+                  await listeningClient.toggleVote(room.id, item.id, own);
+                  setVotes(await listeningClient.votes(room.id));
+                })} className={`rounded-[7px] border px-[7px] py-[4px] text-[10px] disabled:opacity-40 ${own ? "border-accent text-accent" : "border-border-alpha-15 text-text-secondary"}`} title={item.title}>
+                  {item.title} · {count} ♥
+                </button>;
+              })}</div>
+            </div>}
           </div>
         </div>
         <div className="space-y-[12px]">

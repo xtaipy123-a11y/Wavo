@@ -71,4 +71,12 @@ describe("Supabase session bridge", () => {
     expect(auth.signOut).toHaveBeenCalledTimes(1);
     expect(getAuthSession()).toBeNull();
   });
+
+  it("keeps private tokens out of persistent browser storage", () => {
+    setAuthSession(toAuthTokens(supabaseSession));
+    const stored = Array.from({ length: localStorage.length }, (_, i) => localStorage.getItem(localStorage.key(i)!)).join(" ");
+    expect(stored).not.toContain("supabase-access");
+    expect(stored).not.toContain("supabase-refresh");
+    expect(localStorage.getItem("wavo_cached_user")).toContain("user-1");
+  });
 });

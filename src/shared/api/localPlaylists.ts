@@ -50,7 +50,7 @@ function parseBackup(value: unknown): PlaylistBackup["playlists"] {
 
 function ownerId(): string {
   const session = getAuthSession();
-  if (!session?.accessToken || !session.user?.id) throw new Error("Sign in to manage playlists.");
+  if (!session?.user?.id) throw new Error("Sign in to manage playlists.");
   return session.user.id;
 }
 

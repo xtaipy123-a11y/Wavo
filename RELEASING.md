@@ -10,7 +10,7 @@ Die App liest die öffentliche GitHub-Releasequelle über `electron-updater`. Ei
 
 ## Nächste Version veröffentlichen
 
-Die nächste vorbereitete Version ist `0.1.48`. Vor jedem Release `package.json`, `src/shared/config/version.ts` und `RELEASE_NOTES.md` aktualisieren. Danach die Änderungen committen und `main` pushen; den Tag `v<version>` auf denselben Commit setzen und pushen. Der Workflow veröffentlicht den Installer, die `.exe.blockmap`, `latest.yml` und die Versionsnotizen. Unter **Actions** den erfolgreichen Lauf und unter **Releases** alle Dateien prüfen. Ein lokaler Build mit `corepack pnpm run release:win` veröffentlicht nichts auf GitHub.
+Vor jedem Release `package.json`, `src/shared/config/version.ts` und `RELEASE_NOTES.md` aktualisieren. Danach die Änderungen committen und `main` pushen; den Tag `v<version>` auf denselben Commit setzen und pushen. Der Workflow veröffentlicht den Installer, die `.exe.blockmap`, `latest.yml` und die Versionsnotizen. Unter **Actions** den erfolgreichen Lauf und unter **Releases** alle Dateien prüfen. Ein lokaler Build mit `corepack pnpm run release:win` veröffentlicht nichts auf GitHub.
 
 ## Freunde und Nachrichten
 

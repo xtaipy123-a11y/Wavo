@@ -8,6 +8,8 @@ import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { parseSharedPlaylist, socialClient, type Friendship, type SocialMessage, type SocialProfile } from "./socialClient";
 import ListeningPanel from "./ListeningPanel";
+import { getFriendVisibility, listFriendActivity, setFriendVisibility, type FriendActivity } from "@/features/cloud/friendActivity";
+import { CollaborativePanel } from "@/features/cloud/CollaborativePanel";
 import "./SocialLayout.css";
 
 const copy = {
@@ -52,6 +54,9 @@ export default function FriendsPage() {
   const [results, setResults] = useState<SocialProfile[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [profiles, setProfiles] = useState<Record<string, SocialProfile>>({});
+  const [activities, setActivities] = useState<Record<string, FriendActivity>>({});
+  const [shareActivity, setShareActivity] = useState(false);
+  useEffect(() => { if (me) setShareActivity(getFriendVisibility(me) === "friends"); }, [me]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SocialMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -70,8 +75,10 @@ export default function FriendsPage() {
       const rows = await socialClient.listFriendships();
       const ids = [...new Set(rows.map((row) => row.requester_id === me ? row.addressee_id : row.requester_id))];
       const people = await socialClient.profiles(ids);
+      const activityRows = await listFriendActivity(ids).catch(() => []);
       setFriendships(rows);
       setProfiles(Object.fromEntries(people.map((person) => [person.user_id, person])));
+      setActivities(Object.fromEntries(activityRows.map((activity) => [activity.user_id, activity])));
       setError("");
     } catch (cause) {
       setError(errorText(cause, c.setupMissing, c.unknownError));
@@ -87,6 +94,7 @@ export default function FriendsPage() {
     const supabase = getSupabaseClient();
     const channel = supabase.channel(`wavo-friends-${me}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "wavo_friendships" }, () => void loadFriends())
+      .on("postgres_changes", { event: "*", schema: "public", table: "wavo_friend_activity" }, () => void loadFriends())
       .subscribe();
     return () => { window.clearInterval(timer); void supabase.removeChannel(channel); };
   }, [me, loadFriends]);
@@ -225,9 +233,16 @@ export default function FriendsPage() {
         <div className="mb-[24px] flex items-center gap-[14px]">
           <div className="flex h-[44px] w-[44px] items-center justify-center rounded-[14px] bg-accent/20 text-accent"><LuUsers size={23} /></div>
           <div><h1 className="m-0 text-[27px] font-bold">{c.title}</h1><p className="m-0 text-[13px] text-text-tertiary">{c.subtitle}</p></div>
+          <label className="ml-auto flex items-center gap-[7px] text-[11px] text-text-secondary"><input type="checkbox" className="accent-accent" checked={shareActivity} onChange={(event) => {
+            if (!me) return;
+            const visible = event.target.checked;
+            setShareActivity(visible);
+            setFriendVisibility(me, visible ? "friends" : "nobody");
+          }} />{locale === "de" ? "Aktuellen Song Freunden zeigen" : "Show current song to friends"}</label>
         </div>
         {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{error}</div>}
         <ListeningPanel friends={accepted.map((row) => { const id = personId(row); return { id, profile: profiles[id] }; })} />
+        <CollaborativePanel friends={accepted.map((row) => { const id = personId(row); return { id, name: profiles[id]?.display_name ?? "Wavo" }; })} />
         <div className="wavo-social-layout" data-chat-open={chatIsOpen}>
           <aside className="wavo-social-people rounded-[16px] border border-border-alpha-15 bg-bg-secondary/70 p-[14px]">
             <h2 className="mb-[12px] mt-[2px] text-[14px] font-semibold">{locale === "de" ? "Unterhaltungen" : "Conversations"}</h2>
@@ -237,6 +252,12 @@ export default function FriendsPage() {
             {search.trim() && <div className="mt-[14px]"><p className="mb-[7px] text-[11px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.search}</p>{results.length ? results.map((person) => <div key={person.user_id} className="flex items-center gap-[9px] rounded-[9px] px-[5px] py-[8px]"><Avatar profile={person} /><div className="min-w-0 flex-1"><p className="m-0 truncate text-[13px] font-semibold">{person.display_name}</p><p className="m-0 truncate text-[11px] text-text-tertiary">@{person.username}</p></div><button type="button" disabled={busy || existingIds.has(person.user_id)} onClick={() => void act(() => socialClient.requestFriend(person.user_id))} aria-label={`${c.add}: ${person.username}`} title={existingIds.has(person.user_id) ? c.pending : c.add} className="rounded-[8px] p-[7px] text-text-secondary hover:bg-white/10 disabled:opacity-35"><LuUserPlus size={17} /></button></div>) : <p className="text-[12px] text-text-tertiary">{c.searchEmpty}</p>}</div>}
             {incoming.length > 0 && <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.requests} · {incoming.length}</h2>{incoming.map((row) => <div key={row.id} className="flex items-center gap-[9px] py-[7px]"><Avatar profile={profiles[row.requester_id]} /><span className="min-w-0 flex-1 truncate text-[13px]">{profiles[row.requester_id]?.display_name ?? "Wavo"}</span><button type="button" title={c.accept} disabled={busy} onClick={() => void act(() => socialClient.acceptFriend(row.id))} className="rounded-[7px] p-[6px] text-green-400 hover:bg-white/10"><LuCheck size={17} /></button><button type="button" title={c.decline} disabled={busy} onClick={() => void act(() => socialClient.removeFriend(row.id))} className="rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10"><LuX size={17} /></button></div>)}</section>}
             <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.friends} · {accepted.length}</h2>{loading ? <p className="text-[12px] text-text-tertiary">…</p> : accepted.length ? accepted.map((row) => { const id = personId(row); const profile = profiles[id]; return <button key={row.id} type="button" aria-pressed={selectedId === id} onClick={() => setSelectedId(id)} className={`flex w-full items-center gap-[10px] rounded-[10px] border px-[8px] py-[9px] text-left transition-colors hover:bg-white/8 ${selectedId === id ? "border-accent/40 bg-accent/15" : "border-transparent"}`}><Avatar profile={profile} /><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold">{profile?.display_name ?? "Wavo"}</span><span className="block truncate text-[11px] text-text-tertiary">@{profile?.username ?? "…"}</span></span></button>; }) : <p className="text-[12px] leading-[1.5] text-text-tertiary">{c.noFriends}</p>}</section>
+            {accepted.some((row) => activities[personId(row)]?.track_title) && <section className="mt-[12px] rounded-[9px] border border-border-alpha-15 px-[9px] py-[8px]">
+              <p className="m-0 text-[10px] font-semibold uppercase text-text-tertiary">{locale === "de" ? "Hören gerade" : "Listening now"}</p>
+              {accepted.map((row) => { const id = personId(row); const activity = activities[id];
+                return activity?.track_title ? <p key={id} className="mb-0 mt-[5px] truncate text-[11px] text-text-secondary">{profiles[id]?.display_name ?? "Wavo"}: {activity.track_title} · {activity.artist_name}</p> : null;
+              })}
+            </section>}
             {selectedId && accepted.some((row) => personId(row) === selectedId) && <button type="button" disabled={busy} onClick={() => { if (window.confirm(locale === "de" ? "Freund entfernen und Chat schließen?" : "Remove friend and close chat?")) void act(async () => { const row = accepted.find((item) => personId(item) === selectedId); if (row) await socialClient.removeFriend(row.id); setSelectedId(null); }); }} className="mt-[12px] text-[11px] text-text-tertiary hover:text-red-300 disabled:opacity-40">{c.remove}: {profiles[selectedId]?.display_name ?? "Wavo"}</button>}
             {outgoing.length > 0 && <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.sent}</h2>{outgoing.map((row) => <div key={row.id} className="flex items-center gap-[9px] py-[7px]"><Avatar profile={profiles[row.addressee_id]} /><span className="min-w-0 flex-1 truncate text-[12px] text-text-secondary">{profiles[row.addressee_id]?.display_name ?? "Wavo"}</span><button type="button" title={c.remove} disabled={busy} onClick={() => void act(() => socialClient.removeFriend(row.id))} className="p-[5px] text-text-tertiary hover:text-text-primary"><LuX size={15} /></button></div>)}</section>}
           </aside>

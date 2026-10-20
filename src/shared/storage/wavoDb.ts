@@ -726,7 +726,7 @@ class WavoDb {
     );
   }
 
-  async putUserPlaylistRecord(record: StoredUserPlaylistRecord): Promise<void> {
+  async putUserPlaylistRecord(record: StoredUserPlaylistRecord, silentCloud = false): Promise<void> {
     const result = await this.runTransaction("userPlaylists", "readwrite", (store) =>
       new Promise<boolean>((resolve, reject) => {
         const request = store.put(record);
@@ -735,9 +735,12 @@ class WavoDb {
       }),
     );
     if (!result) throw new Error("Playlist could not be saved on this device.");
+    if (!silentCloud && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wavo:cloud-change", {
+      detail: { kind: "playlist", id: record.playlist.id, payload: record, deleted: false },
+    }));
   }
 
-  async deleteUserPlaylistRecord(ownerId: string, playlistId: string): Promise<void> {
+  async deleteUserPlaylistRecord(ownerId: string, playlistId: string, silentCloud = false): Promise<void> {
     const result = await this.runTransaction("userPlaylists", "readwrite", (store) =>
       new Promise<boolean>((resolve, reject) => {
         const request = store.delete(`${ownerId}:${playlistId}`);
@@ -746,6 +749,9 @@ class WavoDb {
       }),
     );
     if (!result) throw new Error("Playlist could not be deleted on this device.");
+    if (!silentCloud && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wavo:cloud-change", {
+      detail: { kind: "playlist", id: playlistId, payload: {}, deleted: true },
+    }));
   }
 
   async clearStore(storeName: "tracks" | "audio" | "lyrics" | "artists"): Promise<void> {

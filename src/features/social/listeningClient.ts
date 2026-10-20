@@ -44,6 +44,7 @@ export interface ListeningInvitation {
   room: ListeningRoom;
   member: ListeningMember;
 }
+export interface ListeningVote { room_id: string; track_id: string; voter_id: string }
 
 function myId(): string {
   const id = getAuthSession()?.user?.id;
@@ -62,6 +63,21 @@ const roomColumns = "id,host_id,active,track_id,track_title,position_ms,is_playi
 const memberColumns = "room_id,user_id,invited_by,status,created_at,joined_at,can_add,can_skip,can_reorder";
 
 export const listeningClient = {
+  async votes(roomId: string): Promise<ListeningVote[]> {
+    const { data, error } = await getSupabaseClient().from("wavo_listening_votes")
+      .select("room_id,track_id,voter_id").eq("room_id", validId(roomId)).limit(1000);
+    if (error) throw error;
+    return (data ?? []) as ListeningVote[];
+  },
+
+  async toggleVote(roomId: string, trackId: string, hasVoted: boolean): Promise<void> {
+    const client = getSupabaseClient();
+    const query = hasVoted
+      ? client.from("wavo_listening_votes").delete().eq("room_id", validId(roomId)).eq("track_id", trackId).eq("voter_id", myId())
+      : client.from("wavo_listening_votes").insert({ room_id: validId(roomId), track_id: trackId, voter_id: myId() });
+    const { error } = await query;
+    if (error) throw error;
+  },
   async snapshot(): Promise<{ room: ListeningRoom | null; members: ListeningMember[]; invitations: ListeningInvitation[] }> {
     const client = getSupabaseClient();
     const id = myId();

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, screen, dialog, session, nativeImage, powerSaveBlocker } from "electron";
+import { app, BrowserWindow, ipcMain, shell, screen, dialog, session, nativeImage, powerSaveBlocker, safeStorage } from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
@@ -341,6 +341,39 @@ if (!gotTheLock) {
 
     ipcMain.handle("app:get-version", () => {
       return app.getVersion();
+    });
+
+    const authFile = path.join(app.getPath("userData"), "wavo-auth.bin");
+    let authStorageTask: Promise<unknown> = Promise.resolve();
+    const authorizedAuthSender = (event: Electron.IpcMainInvokeEvent) => event.sender === mainWindow?.webContents;
+    const protectedStorageAvailable = () => safeStorage.isEncryptionAvailable() &&
+      (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+    ipcMain.handle("auth-storage:read", async (event) => {
+      if (!authorizedAuthSender(event) || !protectedStorageAvailable()) return null;
+      try { return safeStorage.decryptString(await fs.promises.readFile(authFile)); }
+      catch { return null; }
+    });
+    ipcMain.handle("auth-storage:write", async (event, value: unknown) => {
+      if (!authorizedAuthSender(event) || !protectedStorageAvailable() || typeof value !== "string" || value.length > 100000) return false;
+      const task = authStorageTask.catch(() => {}).then(async () => {
+        const tempFile = `${authFile}.tmp`;
+        try {
+          await fs.promises.writeFile(tempFile, safeStorage.encryptString(value), { mode: 0o600 });
+          await fs.promises.rename(tempFile, authFile);
+          return true;
+        } catch { return false; }
+      });
+      authStorageTask = task;
+      return task;
+    });
+    ipcMain.handle("auth-storage:remove", async (event) => {
+      if (!authorizedAuthSender(event)) return false;
+      const task = authStorageTask.catch(() => {}).then(async () => {
+        try { await fs.promises.rm(authFile, { force: true }); return true; }
+        catch { return false; }
+      });
+      authStorageTask = task;
+      return task;
     });
 
     ipcMain.handle("app:set-icon", async (_event, dataUrl: string) => {

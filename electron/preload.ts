@@ -79,6 +79,9 @@ export interface WavoElectronApi {
   }>;
   setAppIcon: (dataUrl: string) => Promise<void>;
   getAppVersion: () => Promise<string>;
+  authStorageRead: () => Promise<string | null>;
+  authStorageWrite: (value: string) => Promise<boolean>;
+  authStorageRemove: () => Promise<boolean>;
   getCacheStats: () => Promise<ElectronCacheStats>;
   openCacheFolder: () => Promise<boolean>;
   clearCoversCache: () => Promise<boolean>;
@@ -184,6 +187,9 @@ const api: WavoElectronApi = {
   saveDump: (input) => ipcRenderer.invoke("dialog:save-dump", input),
   setAppIcon: (dataUrl) => ipcRenderer.invoke("app:set-icon", dataUrl),
   getAppVersion: () => ipcRenderer.invoke("app:get-version"),
+  authStorageRead: () => ipcRenderer.invoke("auth-storage:read"),
+  authStorageWrite: (value) => ipcRenderer.invoke("auth-storage:write", value),
+  authStorageRemove: () => ipcRenderer.invoke("auth-storage:remove"),
   getCacheStats: () => ipcRenderer.invoke("storage:get-cache-stats"),
   openCacheFolder: () => ipcRenderer.invoke("shell:open-cache-folder"),
   clearCoversCache: () => ipcRenderer.invoke("storage:clear-covers-cache"),

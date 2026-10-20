@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useEffect,
   type ReactNode,
 } from "react";
 import {
@@ -24,6 +25,11 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => getStoredLocale());
+  useEffect(() => {
+    const update = () => setLocaleState(getStoredLocale());
+    window.addEventListener("wavo:locale-changed", update);
+    return () => window.removeEventListener("wavo:locale-changed", update);
+  }, []);
 
   const setLocale = useCallback((newLocale: Locale) => {
     storeLocale(newLocale);

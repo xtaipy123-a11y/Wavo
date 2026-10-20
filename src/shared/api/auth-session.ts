@@ -4,15 +4,29 @@ import { getSupabaseClient } from "../supabase/client";
 
 export type { AuthTokens, AuthUser };
 
-const STORAGE_KEY = "wavo_auth_session";
+const PUBLIC_USER_KEY = "wavo_cached_user";
+const OLD_STORAGE_KEY = "wavo_auth_session";
 let session: AuthTokens | null = null;
 let refreshPromise: Promise<AuthTokens | null> | null = null;
 
 function load(): AuthTokens | null {
   if (typeof window === "undefined") return null;
   try {
-    const value = localStorage.getItem(STORAGE_KEY);
-    return value ? (JSON.parse(value) as AuthTokens) : null;
+    localStorage.removeItem("wavo_access_token");
+    localStorage.removeItem("wavo_refresh_token");
+    const old = localStorage.getItem(OLD_STORAGE_KEY);
+    if (old) {
+      try {
+        const legacy = JSON.parse(old) as AuthTokens;
+        if (legacy.user?.id) localStorage.setItem(PUBLIC_USER_KEY, JSON.stringify(legacy.user));
+      } finally { localStorage.removeItem(OLD_STORAGE_KEY); }
+    }
+    const value = localStorage.getItem(PUBLIC_USER_KEY);
+    if (!value) return null;
+    const user = JSON.parse(value) as AuthUser;
+    if (!user?.id) return null;
+    // Public identity permits offline local data access; no auth token is persisted here.
+    return { accessToken: "", refreshToken: "", accessTokenExpiresAt: "", expiresAt: 0, user };
   } catch {
     return null;
   }
@@ -47,8 +61,11 @@ export function setAuthSession(next: AuthTokens | null): void {
   const previous = getAuthSession();
   session = next;
   if (typeof window !== "undefined") {
-    if (next) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    else localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(OLD_STORAGE_KEY);
+    localStorage.removeItem("wavo_access_token");
+    localStorage.removeItem("wavo_refresh_token");
+    if (next) localStorage.setItem(PUBLIC_USER_KEY, JSON.stringify(next.user));
+    else localStorage.removeItem(PUBLIC_USER_KEY);
     if (previous?.accessToken !== next?.accessToken || previous?.user?.id !== next?.user?.id) {
       window.dispatchEvent(new Event("auth:changed"));
     }

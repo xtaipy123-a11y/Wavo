@@ -16,7 +16,9 @@ export function getStoredLocale(): Locale {
 
 export function storeLocale(locale: Locale): void {
   if (typeof window !== "undefined") {
+    const changed = window.localStorage.getItem(LOCALE_STORAGE_KEY) !== locale;
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    if (changed && typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("wavo:locale-changed"));
   }
 }
 

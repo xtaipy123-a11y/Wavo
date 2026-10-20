@@ -7,6 +7,8 @@ import Button from "@/shared/ui/Button";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { localPlaylists } from "@/shared/api/localPlaylists";
+import { MusicStatsPanel } from "@/features/cloud/MusicStatsPanel";
+import { CloudStatusPanel } from "@/features/cloud/CloudStatusPanel";
 import { notifyLibraryChanged } from "@/features/library/hooks/usePlaylists";
 import cleanDuckAnimationData from "@/assets/animations/clean_duck.json";
 import {
@@ -610,6 +612,9 @@ export function StorageTab({ searchQuery: _searchQuery }: { searchQuery?: string
           <Button variant="secondary" size="sm" type="button" disabled={backupBusy} onClick={() => backupInputRef.current?.click()}>{t("settings.storage.backup_import")}</Button>
         </div>
       </div>
+
+      <CloudStatusPanel />
+      <MusicStatsPanel />
 
       <div className="mt-auto flex items-center gap-[8px] pt-4">
         <Button

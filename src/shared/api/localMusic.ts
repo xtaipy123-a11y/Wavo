@@ -11,6 +11,10 @@ type LikedEntry = { track: Track; likedAt: string };
 type CollectionType = "albums" | "artists" | "playlists";
 type SavedCollection = { id: string; value: Record<string, unknown>; savedAt: string };
 
+function changed(kind: "like" | "album" | "artist" | "catalog_playlist" | "history", id: string, payload: unknown, deleted = false): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wavo:cloud-change", { detail: { kind, id, payload, deleted } }));
+}
+
 function storageKey(kind: "likes" | "history" | CollectionType): string | null {
   const userId = getAuthSession()?.user?.id;
   return userId ? `wavo_local_${kind}_${userId}` : null;
@@ -58,11 +62,14 @@ export const localMusic = {
   saveCollection(type: CollectionType, id: string, value: Record<string, unknown>): void {
     const current = readItems<SavedCollection>(type);
     if (current.some((entry) => entry.id === id)) return;
-    writeItems(type, [{ id, value, savedAt: new Date().toISOString() }, ...current].slice(0, 500));
+    const entry = { id, value, savedAt: new Date().toISOString() };
+    writeItems(type, [entry, ...current].slice(0, 5000));
+    changed(type === "playlists" ? "catalog_playlist" : type === "albums" ? "album" : "artist", id, entry);
   },
 
   removeCollection(type: CollectionType, id: string): void {
     writeItems(type, readItems<SavedCollection>(type).filter((entry) => entry.id !== id));
+    changed(type === "playlists" ? "catalog_playlist" : type === "albums" ? "album" : "artist", id, {}, true);
   },
 
   listLikedTracks(limit = 100, cursor?: string): ApiLikedTracksPage {
@@ -72,14 +79,14 @@ export const localMusic = {
   likeTrack(track: Track): void {
     const current = readItems<LikedEntry>("likes");
     if (current.some((entry) => entry.track.id === track.id)) return;
-    writeItems("likes", [
-      { track, likedAt: new Date().toISOString() },
-      ...current,
-    ].slice(0, 500));
+    const entry = { track, likedAt: new Date().toISOString() };
+    writeItems("likes", [entry, ...current].slice(0, 5000));
+    changed("like", track.id, entry);
   },
 
   unlikeTrack(id: string): void {
     writeItems("likes", readItems<LikedEntry>("likes").filter((entry) => entry.track.id !== id));
+    changed("like", id, {}, true);
   },
 
   recordPlaybackEvent(payload: RecordPlaybackEventRequest): void {
@@ -101,9 +108,39 @@ export const localMusic = {
       listenedAt: new Date().toISOString(),
     };
     writeItems("history", [item, ...current].slice(0, 500));
+    changed("history", item.id, item);
   },
 
   getHistory(cursor?: string, limit = 30): PlaybackHistoryResponse {
     return page(readItems<PlaybackHistoryItem>("history"), limit, cursor);
+  },
+
+  cloudSnapshot(): Array<{ kind: "like" | "album" | "artist" | "catalog_playlist" | "history"; id: string; payload: unknown }> {
+    return [
+      ...readItems<LikedEntry>("likes").map((entry) => ({ kind: "like" as const, id: entry.track.id, payload: entry })),
+      ...(["albums", "artists", "playlists"] as const).flatMap((type) => readItems<SavedCollection>(type).map((entry) => ({
+        kind: (type === "albums" ? "album" : type === "artists" ? "artist" : "catalog_playlist") as "album" | "artist" | "catalog_playlist",
+        id: entry.id, payload: entry,
+      }))),
+      ...readItems<PlaybackHistoryItem>("history").map((entry) => ({ kind: "history" as const, id: entry.id, payload: entry })),
+    ];
+  },
+
+  applyCloudItem(kind: "like" | "album" | "artist" | "catalog_playlist" | "history", id: string, payload: unknown, deleted: boolean): void {
+    const type = kind === "like" ? "likes" : kind === "album" ? "albums" : kind === "artist" ? "artists" : kind === "catalog_playlist" ? "playlists" : "history";
+    if (kind === "like") {
+      const entries = readItems<LikedEntry>("likes").filter((entry) => entry.track.id !== id);
+      if (!deleted && payload && typeof payload === "object" && "track" in payload) entries.unshift(payload as LikedEntry);
+      writeItems("likes", entries.slice(0, 5000));
+    } else if (kind === "history") {
+      const entries = readItems<PlaybackHistoryItem>("history").filter((entry) => entry.id !== id);
+      if (!deleted && payload && typeof payload === "object" && "track" in payload) entries.unshift(payload as PlaybackHistoryItem);
+      writeItems("history", entries.sort((a, b) => b.listenedAt.localeCompare(a.listenedAt)).slice(0, 500));
+    } else {
+      const entries = readItems<SavedCollection>(type as CollectionType).filter((entry) => entry.id !== id);
+      if (!deleted && payload && typeof payload === "object" && "value" in payload) entries.unshift(payload as SavedCollection);
+      writeItems(type as CollectionType, entries.slice(0, 5000));
+    }
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("library:changed"));
   },
 };
