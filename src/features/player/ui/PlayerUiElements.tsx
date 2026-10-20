@@ -9,6 +9,7 @@ import {
   Shuffle,
 } from "@solar-icons/react";
 import { AddLine, CheckFill } from "@mingcute/react";
+import { LuCheck, LuDownload, LuX } from "react-icons/lu";
 import {
   PlayerMorphIcon,
   ICON_PLAY,
@@ -22,6 +23,8 @@ import { ArtistLink } from "@/features/artist";
 import { useCoverReady, CoverImage } from "@/features/covers";
 import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import Tooltip from "@/shared/ui/Tooltip";
+import { showToast } from "@/shared/ui";
+import { useDownloadStore } from "@/features/downloads/downloadStore";
 import { VolumePicker } from "./VolumePicker";
 import { TimelineSlider } from "./TimelineSlider";
 
@@ -81,6 +84,12 @@ export function PlayerUiElements({
   const trackArtists = track?.artists || "";
 
   const isLiked = useIsTrackLiked(track?.id);
+  const isDownloaded = useDownloadStore((state) =>
+    Boolean(track && state.tracks.some((download) => download.id === track.id)),
+  );
+  const downloadStatus = useDownloadStore((state) =>
+    track ? state.statusById[track.id] : undefined,
+  );
   const likeMutation = useLikeTrack();
   const unlikeMutation = useUnlikeTrack();
   const togglingRef = useRef(false);
@@ -100,7 +109,28 @@ export function PlayerUiElements({
 
   const isCoverLoaded = useCoverReady(coverUrl);
 
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+
+  const handleDownload = useCallback(async () => {
+    if (!track || isDownloaded) return;
+    const downloads = useDownloadStore.getState();
+    if (downloadStatus === "downloading") {
+      downloads.cancel(track.id);
+      return;
+    }
+    if (downloadStatus) return;
+    try {
+      await downloads.download(track);
+      showToast(locale === "de" ? "Offline gespeichert" : "Saved for offline", "checkmark", {
+        description: track.title,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      showToast(locale === "de" ? "Download fehlgeschlagen" : "Download failed", "error", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  }, [track, isDownloaded, downloadStatus, locale]);
 
   return (
     <>
@@ -210,6 +240,28 @@ export function PlayerUiElements({
           </p>
         </div>
       </div>
+
+      {track && (
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={isDownloaded || downloadStatus === "removing"}
+          aria-label={downloadStatus === "downloading"
+            ? (locale === "de" ? "Download abbrechen" : "Cancel download")
+            : isDownloaded
+              ? (locale === "de" ? "Offline gespeichert" : "Saved for offline")
+              : (locale === "de" ? "Offline speichern" : "Download for offline")}
+          className="inline-flex min-h-[32px] items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-[12px] font-medium text-white/85 backdrop-blur-md transition-colors hover:border-white/30 hover:bg-black/50 disabled:cursor-default disabled:opacity-60"
+          data-no-window-drag
+        >
+          {downloadStatus === "downloading" ? <LuX size={14} /> : isDownloaded ? <LuCheck size={14} /> : <LuDownload size={14} />}
+          <span>{downloadStatus === "downloading"
+            ? (locale === "de" ? "Download abbrechen" : "Cancel download")
+            : isDownloaded
+              ? (locale === "de" ? "Offline gespeichert" : "Saved for offline")
+              : (locale === "de" ? "Offline speichern" : "Download for offline")}</span>
+        </button>
+      )}
 
       {/* Timeline (Compact, with smooth spring pill, no thumb) */}
       <TimelineSlider
