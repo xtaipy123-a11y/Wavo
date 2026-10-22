@@ -1,4 +1,10 @@
-# Neu in Wavo 0.1.51
+# Neu in Wavo 0.1.52
+
+- Eigene Musik erkennt gültige Supabase-Konten wieder: Uploads, EPs, Alben, Freigabelinks und Wiedergabe werden nicht mehr fälschlich als „nicht angemeldet“ blockiert.
+- Einladungen zu gemeinsamen Playlists akzeptieren gültige Nutzer- und Playlist-IDs wieder.
+- Für diese Korrektur ist keine neue SQL-Migration nötig.
+
+## Seit 0.1.51
 
 - Eigene Musik als MP3, WAV, FLAC, M4A, AAC, OGG oder WebM hochladen. Jeder Song erscheint zunächst als private Single.
 - Aus hochgeladenen Songs EPs und Alben mit eigener Reihenfolge, Beschreibung und Cover erstellen.

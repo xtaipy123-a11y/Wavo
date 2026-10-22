@@ -7,7 +7,7 @@ import type { Track } from "@/shared/types";
 export const PRIVATE_MUSIC_BUCKET = "wavo-private-music";
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const audioTypes: Record<string, string> = {
   mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", m4a: "audio/mp4",
   aac: "audio/aac", ogg: "audio/ogg", webm: "audio/webm",
