@@ -155,10 +155,11 @@ export const privateMusic = {
     await resumableUpload(file, path, mime, onProgress);
     let registered = false;
     try {
-      const { data, error } = await getSupabaseClient().from("wavo_uploads").insert({
+      const duration_ms = await durationMs(file);
+      const { error } = await getSupabaseClient().from("wavo_uploads").insert({
         id, owner_id: owner, title: cleanTitle, artist_name: cleanArtist,
-        duration_ms: await durationMs(file), mime_type: mime, byte_size: file.size, storage_path: path,
-      }).select("*").single();
+        duration_ms, mime_type: mime, byte_size: file.size, storage_path: path,
+      });
       if (error) throw error;
       registered = true;
       const { error: releaseError } = await getSupabaseClient().from("wavo_releases").insert({
@@ -170,7 +171,9 @@ export const privateMusic = {
       });
       if (itemError) throw itemError;
       void wavoDb.putAudio(uploadTrackId(id), file, mime).catch(() => {});
-      return data as PrivateUpload;
+      return { id, owner_id: owner, title: cleanTitle, artist_name: cleanArtist,
+        duration_ms, mime_type: mime, byte_size: file.size, storage_path: path,
+        created_at: new Date().toISOString() };
     } catch (error) {
       await getSupabaseClient().from("wavo_releases").delete().eq("id", releaseId);
       if (registered) await getSupabaseClient().from("wavo_uploads").delete().eq("id", id);

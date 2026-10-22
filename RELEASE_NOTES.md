@@ -1,4 +1,9 @@
-# Neu in Wavo 0.1.52
+# Neu in Wavo 0.1.53
+
+- Eigene Songs werden nach dem Dateiupload wieder in der Bibliothek gespeichert. Der Fehler „new row violates row-level security policy for table wavo_uploads“ ist behoben.
+- Die privaten Supabase-Zugriffsregeln bleiben bestehen; für dieses Update ist keine SQL-Migration nötig.
+
+## Seit 0.1.52
 
 - Eigene Musik erkennt gültige Supabase-Konten wieder: Uploads, EPs, Alben, Freigabelinks und Wiedergabe werden nicht mehr fälschlich als „nicht angemeldet“ blockiert.
 - Einladungen zu gemeinsamen Playlists akzeptieren gültige Nutzer- und Playlist-IDs wieder.
