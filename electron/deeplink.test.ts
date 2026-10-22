@@ -18,6 +18,9 @@ describe("parseDeeplink", () => {
       type: "track",
       id: "RGdkabupfPI",
     });
+    const token = "a".repeat(64);
+    expect(parseDeeplink(`wavo://release?id=11111111-1111-4111-8111-111111111111&token=${token}`))
+      .toEqual({ type: "release", id: "11111111-1111-4111-8111-111111111111", token });
   });
 
   it("rejects smuggled urls", () => {
@@ -35,6 +38,8 @@ describe("parseDeeplink", () => {
     expect(parseDeeplink("wavo://track?id=RGdkabupfPIextra")).toBeNull();
     expect(parseDeeplink("wavo://artist?id=ABaaaaaaaaaaaaaaaaaaaaaa")).toBeNull();
     expect(parseDeeplink("wavo://artist?id=UCaaa/../../../../etc")).toBeNull();
+    expect(parseDeeplink("wavo://release?id=11111111-1111-4111-8111-111111111111&token=bad")).toBeNull();
+    expect(parseDeeplink(`wavo://release?id=11111111-1111-4111-8111-111111111111&token=${"a".repeat(64)}&redirect=https://evil.com`)).toBeNull();
     expect(parseDeeplink("not a url")).toBeNull();
   });
 

@@ -148,7 +148,7 @@ function LikesPlaylistCard({
 
 export default function LibraryPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [activeTab, setActiveTab] = useState<LibraryTab>("playlists");
   const [stateByTab, setStateByTab] = useState<LibraryState>(initialState);
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -373,7 +373,7 @@ export default function LibraryPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-[10px] px-[32px] pb-[10px]">
-            <div className="flex flex-wrap items-center gap-[10px]"><LibraryTabs activeTab={activeTab} onChange={setActiveTab} /><button type="button" onClick={() => navigate("/downloads")} className="inline-flex items-center gap-[6px] rounded-lg border border-border-alpha-15 px-[11px] py-[8px] text-[12px] text-text-secondary hover:bg-white/10 hover:text-text-primary"><LuDownload size={15} />Downloads</button></div>
+            <div className="flex flex-wrap items-center gap-[10px]"><LibraryTabs activeTab={activeTab} onChange={setActiveTab} /><button type="button" onClick={() => navigate("/downloads")} className="inline-flex items-center gap-[6px] rounded-lg border border-border-alpha-15 px-[11px] py-[8px] text-[12px] text-text-secondary hover:bg-white/10 hover:text-text-primary"><LuDownload size={15} />Downloads</button><button type="button" onClick={() => navigate("/uploads")} className="inline-flex items-center gap-[6px] rounded-lg border border-border-alpha-15 px-[11px] py-[8px] text-[12px] text-text-secondary hover:bg-white/10 hover:text-text-primary">{locale === "de" ? "Eigene Musik" : "Your music"}</button></div>
             <LibraryControls
               activeTab={activeTab}
               query={activeState.query}

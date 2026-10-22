@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, toClientTrack } from "@/shared/api";
 import { playerEngine } from "@/features/player";
+import { setPendingReleaseToken } from "./pendingReleaseLink";
 
 interface DeeplinkTarget {
-  type: "artist" | "album" | "playlist" | "track";
+  type: "artist" | "album" | "playlist" | "track" | "release";
   id: string;
+  token?: string;
 }
 
 // user playlist ids are uuids or pl- tokens, everything else is a catalog id
@@ -25,6 +27,12 @@ export default function DeeplinkHandler() {
       void (async () => {
         try {
           switch (target.type) {
+            case "release":
+              if (target.token) {
+                setPendingReleaseToken(target.token);
+                navigate(`/uploads?claim=${encodeURIComponent(target.token)}`);
+              }
+              break;
             case "artist":
               navigate(`/artist?id=${encodeURIComponent(target.id)}`);
               break;

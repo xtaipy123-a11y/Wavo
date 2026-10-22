@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   resolveDirectAudioStream: vi.fn(),
   searchRaw: vi.fn(),
   resolveSoundCloudStream: vi.fn(),
+  privateStream: vi.fn(),
 }));
 
 vi.mock("@/shared/media/innertube", async (importOriginal) => {
@@ -17,6 +18,11 @@ vi.mock("@/shared/media/soundcloud", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/shared/media/soundcloud")>();
   return { ...actual, resolveSoundCloudStream: mocks.resolveSoundCloudStream };
 });
+
+vi.mock("@/features/uploads/privateMusic", () => ({
+  parseUploadTrackId: (id: string) => /^upload:[0-9a-f-]{36}$/i.test(id) ? id.slice(7) : null,
+  privateMusic: { stream: mocks.privateStream },
+}));
 
 import { resolvePlaybackStream } from "./streamResolver";
 import { clearYoutubeStandInCache } from "./youtubeStandIn";
@@ -43,7 +49,20 @@ afterEach(() => {
   mocks.resolveDirectAudioStream.mockReset();
   mocks.searchRaw.mockReset();
   mocks.resolveSoundCloudStream.mockReset();
+  mocks.privateStream.mockReset();
   clearYoutubeStandInCache();
+});
+
+describe("resolvePlaybackStream for private uploads", () => {
+  it("plays the authorized storage URL without searching the public catalog", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    mocks.privateStream.mockResolvedValue({ url: "https://example.supabase.co/storage/signed", mimeType: "audio/mpeg", byteSize: 1200 });
+    const result = await resolvePlaybackStream(track(`upload:${id}`));
+    expect(mocks.privateStream).toHaveBeenCalledWith(id, undefined);
+    expect(result).toMatchObject({ url: "https://example.supabase.co/storage/signed", mimeType: "audio/mpeg", contentLength: 1200 });
+    expect(mocks.searchRaw).not.toHaveBeenCalled();
+    expect(mocks.resolveDirectAudioStream).not.toHaveBeenCalled();
+  });
 });
 
 describe("resolvePlaybackStream for youtube ids", () => {

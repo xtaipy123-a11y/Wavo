@@ -2,8 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { MainNetResult } from "./netdiag";
 
 export interface DeeplinkTarget {
-  type: "artist" | "album" | "playlist" | "track";
+  type: "artist" | "album" | "playlist" | "track" | "release";
   id: string;
+  token?: string;
 }
 
 export interface ElectronCacheStats {

@@ -22,7 +22,8 @@ export async function publishFriendActivity(userId: string) {
   if (!navigator.onLine || getAuthSession()?.user?.id !== userId) return;
   const player = usePlayerStore.getState();
   const visibility = getFriendVisibility(userId);
-  const track = visibility === "friends" && player.status === "playing" ? player.currentTrack : null;
+  const track = visibility === "friends" && player.status === "playing" &&
+    !player.currentTrack?.id.startsWith("upload:") ? player.currentTrack : null;
   const { error } = await getSupabaseClient().from("wavo_friend_activity").upsert({
     user_id: userId, visibility,
     track_id: track?.id ?? null, track_title: track?.title?.slice(0, 500) ?? null,

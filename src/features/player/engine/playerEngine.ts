@@ -1030,7 +1030,8 @@ class PlayerEngine {
       this.radioAppendTimeout = null;
     }
     if (usePlayerStore.getState().repeat === "all") return;
-    if (usePlayerStore.getState().playbackContext === "downloads" || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+    if (seedTrackId.startsWith("upload:") || usePlayerStore.getState().playbackContext === "downloads" ||
+        (typeof navigator !== "undefined" && navigator.onLine === false)) return;
 
     this.radioAppendTimeout = setTimeout(() => {
       void this.appendSimilarTracksForSeed(session, seedTrackId);

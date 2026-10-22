@@ -9,6 +9,7 @@ import {
   type PlaybackStream,
 } from "./playbackStream";
 import { findYoutubeStandIn } from "./youtubeStandIn";
+import { parseUploadTrackId, privateMusic } from "@/features/uploads/privateMusic";
 
 export type { BufferedPlaybackStream, PlayableTrack, PlaybackStream, UrlPlaybackStream } from "./playbackStream";
 
@@ -35,6 +36,12 @@ async function resolveSoundCloud(track: PlayableTrack, signal?: AbortSignal): Pr
 }
 
 export async function resolvePlaybackStream(track: PlayableTrack, signal?: AbortSignal): Promise<PlaybackStream> {
+  const uploadId = parseUploadTrackId(track.id);
+  if (uploadId) {
+    const stream = await privateMusic.stream(uploadId, signal);
+    return { url: stream.url, mimeType: stream.mimeType, codec: "unknown", bitrate: 0,
+      contentLength: stream.byteSize, expiresAtMs: Date.now() + 55 * 60 * 1000 };
+  }
   if (toSoundCloudTrackId(track.id)) return resolveSoundCloud(track, signal);
   if (toVideoId(track.id)) return fromInnertubeStream(await resolveDirectAudioStream(track.id, { signal }));
   return resolveYoutubeStandIn(track, signal);

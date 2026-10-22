@@ -16,8 +16,9 @@ const DEEP_LINK_IDS: Record<string, RegExp> = {
 };
 
 export interface DeeplinkTarget {
-  type: "artist" | "album" | "playlist" | "track";
+  type: "artist" | "album" | "playlist" | "track" | "release";
   id: string;
+  token?: string;
 }
 
 export function parseDeeplink(raw: string): DeeplinkTarget | null {
@@ -29,6 +30,14 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
   }
   if (url.protocol !== `${DEEP_LINK_SCHEME}:`) return null;
   const type = url.hostname.toLowerCase();
+  if (type === "release") {
+    const ids = url.searchParams.getAll("id");
+    const tokens = url.searchParams.getAll("token");
+    if (ids.length !== 1 || tokens.length !== 1 || [...url.searchParams.keys()].some((key) => key !== "id" && key !== "token")) return null;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ids[0]!) ||
+        !/^[a-f0-9]{64}$/.test(tokens[0]!)) return null;
+    return { type: "release", id: ids[0]!, token: tokens[0]! };
+  }
   const pattern = DEEP_LINK_IDS[type];
   if (!pattern) return null;
   // exactly one id param, extras rejected so ?id=a&id=b can't pick a winner

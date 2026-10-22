@@ -1,4 +1,11 @@
 import { wavoDb } from "./wavoDb";
+import { getAuthSession } from "@/shared/api/auth-session";
+
+function urlCacheKey(trackId: string): string | null {
+  if (!trackId.startsWith("upload:")) return trackId;
+  const userId = getAuthSession()?.user?.id;
+  return userId ? `${userId}:${trackId}` : null;
+}
 
 export const AUDIO_CACHE_LIMIT_STORAGE_KEY = "wavo_audio_cache_limit_bytes";
 export const DEFAULT_AUDIO_CACHE_LIMIT_BYTES = 3 * 1024 * 1024 * 1024;
@@ -55,9 +62,11 @@ class AudioCache {
   }
 
   async getAudioSrc(trackId: string): Promise<string | null> {
-    if (this.activeUrls.has(trackId)) {
+    const key = urlCacheKey(trackId);
+    if (!key) return null;
+    if (this.activeUrls.has(key)) {
       void wavoDb.touchAudio(trackId);
-      return this.activeUrls.get(trackId)!;
+      return this.activeUrls.get(key)!;
     }
 
     const record = await wavoDb.getAudio(trackId);
@@ -67,7 +76,7 @@ class AudioCache {
 
     if (typeof URL !== "undefined" && URL.createObjectURL) {
       const objectUrl = URL.createObjectURL(record.blob);
-      this.activeUrls.set(trackId, objectUrl);
+      this.activeUrls.set(key, objectUrl);
       return objectUrl;
     }
 
@@ -107,10 +116,12 @@ class AudioCache {
   }
 
   revokeTrackUrl(trackId: string): void {
-    const existing = this.activeUrls.get(trackId);
+    const key = urlCacheKey(trackId);
+    if (!key) return;
+    const existing = this.activeUrls.get(key);
     if (existing && typeof URL !== "undefined" && URL.revokeObjectURL) {
       URL.revokeObjectURL(existing);
-      this.activeUrls.delete(trackId);
+      this.activeUrls.delete(key);
     }
   }
 

@@ -8,6 +8,7 @@ import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { parseSharedPlaylist, socialClient, type Friendship, type SocialMessage, type SocialProfile } from "./socialClient";
 import ListeningPanel from "./ListeningPanel";
+import { privateMusic } from "@/features/uploads/privateMusic";
 import { getFriendVisibility, listFriendActivity, setFriendVisibility, type FriendActivity } from "@/features/cloud/friendActivity";
 import { CollaborativePanel } from "@/features/cloud/CollaborativePanel";
 import "./SocialLayout.css";
@@ -49,7 +50,8 @@ export default function FriendsPage() {
   const sharePlaylistId = params.get("sharePlaylist");
   const shareCollectionType = params.get("shareCollection") === "album" ? "album" : params.get("shareCollection") === "playlist" ? "playlist" : null;
   const shareCollectionId = params.get("shareId");
-  const hasShare = Boolean(sharePlaylistId || (shareCollectionType && shareCollectionId));
+  const shareReleaseId = params.get("shareRelease");
+  const hasShare = Boolean(sharePlaylistId || shareReleaseId || (shareCollectionType && shareCollectionId));
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<SocialProfile[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
@@ -67,6 +69,7 @@ export default function FriendsPage() {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [attachmentSearch, setAttachmentSearch] = useState("");
   const [ownPlaylists, setOwnPlaylists] = useState<{ id: string; title: string }[]>([]);
+  const [ownReleases, setOwnReleases] = useState<{ id: string; title: string }[]>([]);
   const [catalogCollections, setCatalogCollections] = useState<{ id: string; title: string; type: "album" | "playlist" }[]>([]);
   const messagesRef = useRef<HTMLDivElement>(null);
 
@@ -135,12 +138,13 @@ export default function FriendsPage() {
   useEffect(() => {
     if (!hasShare) { setShareTitle(""); return; }
     let alive = true;
-    const request = sharePlaylistId ? api.getUserPlaylist(sharePlaylistId).then(({ playlist }) => playlist.title)
+    const request = shareReleaseId ? privateMusic.release(shareReleaseId).then(({ release }) => release.title)
+      : sharePlaylistId ? api.getUserPlaylist(sharePlaylistId).then(({ playlist }) => playlist.title)
       : shareCollectionType === "album" ? api.getAlbum(shareCollectionId!).then((album) => album.title)
       : api.getPlaylist(shareCollectionId!).then((playlist) => playlist.title);
     void request.then((title) => { if (alive) setShareTitle(title); }).catch((cause) => { if (alive) setError(errorText(cause, c.setupMissing, c.unknownError)); });
     return () => { alive = false; };
-  }, [sharePlaylistId, shareCollectionType, shareCollectionId, hasShare, c.setupMissing, c.unknownError]);
+  }, [sharePlaylistId, shareReleaseId, shareCollectionType, shareCollectionId, hasShare, c.setupMissing, c.unknownError]);
 
   useEffect(() => {
     if (!attachmentOpen) return;
@@ -148,8 +152,11 @@ export default function FriendsPage() {
     void api.listPlaylists().then(({ items }) => {
       if (active) setOwnPlaylists(items.map((item) => ({ id: item.id, title: item.title })));
     }).catch((cause) => { if (active) setError(errorText(cause, c.setupMissing, c.unknownError)); });
+    void privateMusic.releases().then((rows) => {
+      if (active) setOwnReleases(rows.filter((item) => item.owner_id === me).map((item) => ({ id: item.id, title: item.title })));
+    }).catch(() => { if (active) setOwnReleases([]); });
     return () => { active = false; };
-  }, [attachmentOpen, c.setupMissing, c.unknownError]);
+  }, [attachmentOpen, me, c.setupMissing, c.unknownError]);
 
   useEffect(() => {
     if (!attachmentOpen || attachmentSearch.trim().length < 2) { setCatalogCollections([]); return; }
@@ -197,7 +204,8 @@ export default function FriendsPage() {
           source: { type: shareCollectionType, id: shareCollectionId } });
         if (!playlist) throw new Error("Diese Sammlung kann nicht geteilt werden.");
       }
-      await socialClient.sendMessage(selectedId, draft, playlist ?? undefined);
+      if (shareReleaseId) await privateMusic.shareWithFriend(shareReleaseId, selectedId, draft);
+      else await socialClient.sendMessage(selectedId, draft, playlist ?? undefined);
       setDraft("");
       if (hasShare) setParams({}, { replace: true });
       await loadMessages(selectedId);
@@ -217,8 +225,8 @@ export default function FriendsPage() {
     });
   };
 
-  const chooseAttachment = (kind: "mine" | "album" | "playlist", id: string) => {
-    setParams(kind === "mine" ? { sharePlaylist: id } : { shareCollection: kind, shareId: id });
+  const chooseAttachment = (kind: "mine" | "album" | "playlist" | "release", id: string) => {
+    setParams(kind === "mine" ? { sharePlaylist: id } : kind === "release" ? { shareRelease: id } : { shareCollection: kind, shareId: id });
     setAttachmentOpen(false);
     setAttachmentSearch("");
   };
@@ -266,9 +274,9 @@ export default function FriendsPage() {
               <header className="flex shrink-0 items-center gap-[11px] border-b border-border-alpha-15 px-[18px] py-[13px]"><button type="button" title={locale === "de" ? "Zurück zu Freunden" : "Back to friends"} aria-label={locale === "de" ? "Zurück zu Freunden" : "Back to friends"} onClick={() => setSelectedId(null)} className="wavo-social-back rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10 hover:text-text-primary"><LuArrowLeft size={18} /></button><Avatar profile={selectedProfile} /><div className="min-w-0 flex-1"><h2 className="m-0 truncate text-[15px] font-semibold">{selectedProfile?.display_name ?? "Wavo"}</h2><p className="m-0 truncate text-[11px] text-text-tertiary">@{selectedProfile?.username ?? "…"}</p></div><button type="button" title={locale === "de" ? "Chat schließen" : "Close chat"} onClick={() => setSelectedId(null)} className="wavo-social-close rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10 hover:text-text-primary"><LuX size={17} /></button></header>
               <div ref={messagesRef} className="wavo-social-messages flex-1 space-y-[12px] overflow-y-auto px-[18px] py-[20px]">
                 {!messages.length && <div className="flex h-full min-h-[260px] items-center justify-center text-center text-[13px] text-text-tertiary">{c.chatEmpty}</div>}
-                {messages.map((message) => { const mine = message.sender_id === me; const snapshot = parseSharedPlaylist(message.playlist_snapshot); return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[min(80%,420px)] rounded-[14px] px-[13px] py-[10px] text-[13px] leading-[1.5] ${mine ? "bg-accent/25" : "bg-bg-primary"}`}>{message.body && <p className="m-0 whitespace-pre-wrap break-words">{message.body}</p>}{snapshot && <div className={`${message.body ? "mt-[9px]" : ""} rounded-[10px] border border-border-alpha-15 bg-bg-secondary/70 p-[11px]`}><div className="flex items-center gap-[9px]"><LuMusic2 size={19} className="text-accent" /><div className="min-w-0"><p className="m-0 truncate font-semibold">{snapshot.title}</p><p className="m-0 text-[11px] text-text-tertiary">{snapshot.source?.type === "album" ? (locale === "de" ? "Album / EP" : "Album / EP") : c.share} · {snapshot.tracks.length} Tracks</p></div></div><div className="mt-[10px] flex flex-wrap gap-[7px]">{snapshot.source && <button type="button" onClick={() => navigate(`/collection?type=${snapshot.source!.type}&id=${encodeURIComponent(snapshot.source!.id)}`)} className="rounded-[8px] border border-border-alpha-15 px-[10px] py-[6px] text-[11px] font-semibold hover:bg-white/10">{locale === "de" ? "Öffnen" : "Open"}</button>}{!mine && <button type="button" disabled={busy} onClick={() => void importPlaylist(message)} className="flex items-center gap-[6px] rounded-[8px] bg-accent px-[10px] py-[6px] text-[11px] font-semibold text-white hover:opacity-90"><LuDownload size={14} />{c.import}</button>}</div></div>}<time className="mt-[6px] block text-right text-[10px] text-text-tertiary">{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time></div></div>; })}
+                {messages.map((message) => { const mine = message.sender_id === me; const snapshot = parseSharedPlaylist(message.playlist_snapshot); return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[min(80%,420px)] rounded-[14px] px-[13px] py-[10px] text-[13px] leading-[1.5] ${mine ? "bg-accent/25" : "bg-bg-primary"}`}>{message.body && <p className="m-0 whitespace-pre-wrap break-words">{message.body}</p>}{snapshot && <div className={`${message.body ? "mt-[9px]" : ""} rounded-[10px] border border-border-alpha-15 bg-bg-secondary/70 p-[11px]`}><div className="flex items-center gap-[9px]"><LuMusic2 size={19} className="text-accent" /><div className="min-w-0"><p className="m-0 truncate font-semibold">{snapshot.title}</p><p className="m-0 text-[11px] text-text-tertiary">{snapshot.source?.type === "album" ? (locale === "de" ? "Album / EP" : "Album / EP") : c.share} · {snapshot.tracks.length} Tracks</p></div></div><div className="mt-[10px] flex flex-wrap gap-[7px]">{snapshot.source && <button type="button" onClick={() => navigate(`/collection?type=${snapshot.source!.type}&id=${encodeURIComponent(snapshot.source!.id)}`)} className="rounded-[8px] border border-border-alpha-15 px-[10px] py-[6px] text-[11px] font-semibold hover:bg-white/10">{locale === "de" ? "Öffnen" : "Open"}</button>}{!mine && <button type="button" disabled={busy} onClick={() => void importPlaylist(message)} className="flex items-center gap-[6px] rounded-[8px] bg-accent px-[10px] py-[6px] text-[11px] font-semibold text-white hover:opacity-90"><LuDownload size={14} />{c.import}</button>}</div></div>}{message.release_id && <button type="button" onClick={() => navigate(`/uploads?release=${encodeURIComponent(message.release_id!)}`)} className="mt-[9px] flex w-full items-center gap-[9px] rounded-[10px] border border-border-alpha-15 bg-bg-secondary/70 p-[11px] text-left hover:bg-white/10"><LuMusic2 size={19} className="text-accent" /><span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold">{locale === "de" ? "Private Musik" : "Private music"}</span><span className="block text-[11px] text-text-tertiary">{locale === "de" ? "Song oder EP öffnen" : "Open song or EP"}</span></span></button>}<time className="mt-[6px] block text-right text-[10px] text-text-tertiary">{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time></div></div>; })}
               </div>
-              {attachmentOpen && <div className="wavo-social-attachment shrink-0 border-t border-border-alpha-15 bg-bg-primary/80 p-[12px]"><div className="flex items-center gap-[9px]"><h3 className="m-0 flex-1 text-[12px] font-semibold">{locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"}</h3><button type="button" onClick={() => setAttachmentOpen(false)} aria-label={locale === "de" ? "Schließen" : "Close"} className="rounded p-[4px] hover:bg-white/10"><LuX size={14} /></button></div><label className="mt-[9px] flex items-center gap-[7px] rounded-[8px] border border-border-alpha-15 bg-bg-secondary px-[9px] py-[7px]"><LuSearch size={14} className="text-text-tertiary" /><input value={attachmentSearch} onChange={(event) => setAttachmentSearch(event.target.value)} placeholder={locale === "de" ? "Album, EP oder Playlist suchen …" : "Search albums, EPs or playlists …"} className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label><div className="mt-[8px] max-h-[190px] overflow-y-auto"><p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Deine Playlists" : "Your playlists"}</p>{ownPlaylists.filter((item) => item.title.toLowerCase().includes(attachmentSearch.toLowerCase())).slice(0, 8).map((item) => <button key={`mine-${item.id}`} type="button" onClick={() => chooseAttachment("mine", item.id)} className="block w-full truncate rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10">{item.title}</button>)}{catalogCollections.length > 0 && <p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Katalog" : "Catalog"}</p>}{catalogCollections.map((item) => <button key={`${item.type}-${item.id}`} type="button" onClick={() => chooseAttachment(item.type, item.id)} className="flex w-full items-center gap-[8px] rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10"><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-[10px] text-text-tertiary">{item.type === "album" ? "Album / EP" : "Playlist"}</span></button>)}</div></div>}
+              {attachmentOpen && <div className="wavo-social-attachment shrink-0 border-t border-border-alpha-15 bg-bg-primary/80 p-[12px]"><div className="flex items-center gap-[9px]"><h3 className="m-0 flex-1 text-[12px] font-semibold">{locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"}</h3><button type="button" onClick={() => setAttachmentOpen(false)} aria-label={locale === "de" ? "Schließen" : "Close"} className="rounded p-[4px] hover:bg-white/10"><LuX size={14} /></button></div><label className="mt-[9px] flex items-center gap-[7px] rounded-[8px] border border-border-alpha-15 bg-bg-secondary px-[9px] py-[7px]"><LuSearch size={14} className="text-text-tertiary" /><input value={attachmentSearch} onChange={(event) => setAttachmentSearch(event.target.value)} placeholder={locale === "de" ? "Album, EP oder Playlist suchen …" : "Search albums, EPs or playlists …"} className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label><div className="mt-[8px] max-h-[190px] overflow-y-auto"><p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Deine Playlists" : "Your playlists"}</p>{ownPlaylists.filter((item) => item.title.toLowerCase().includes(attachmentSearch.toLowerCase())).slice(0, 8).map((item) => <button key={`mine-${item.id}`} type="button" onClick={() => chooseAttachment("mine", item.id)} className="block w-full truncate rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10">{item.title}</button>)}{ownReleases.length > 0 && <p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Deine private Musik" : "Your private music"}</p>}{ownReleases.filter((item) => item.title.toLowerCase().includes(attachmentSearch.toLowerCase())).slice(0, 8).map((item) => <button key={`release-${item.id}`} type="button" onClick={() => chooseAttachment("release", item.id)} className="block w-full truncate rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10">{item.title}</button>)}{catalogCollections.length > 0 && <p className="my-[6px] text-[10px] font-bold uppercase tracking-[.12em] text-text-tertiary">{locale === "de" ? "Katalog" : "Catalog"}</p>}{catalogCollections.map((item) => <button key={`${item.type}-${item.id}`} type="button" onClick={() => chooseAttachment(item.type, item.id)} className="flex w-full items-center gap-[8px] rounded-[7px] px-[8px] py-[6px] text-left text-[12px] hover:bg-white/10"><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-[10px] text-text-tertiary">{item.type === "album" ? "Album / EP" : "Playlist"}</span></button>)}</div></div>}
               {hasShare && <div className="flex shrink-0 items-center gap-[9px] border-t border-border-alpha-15 bg-accent/10 px-[16px] py-[10px] text-[12px]"><LuMusic2 size={17} className="text-accent" /><span className="min-w-0 flex-1 truncate">{c.share}: {shareTitle || "…"}</span><button type="button" title={c.remove} onClick={() => setParams({}, { replace: true })}><LuX size={15} /></button></div>}
               <form onSubmit={(event) => void send(event)} className="flex shrink-0 items-center gap-[9px] border-t border-border-alpha-15 p-[13px]"><button type="button" title={locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"} aria-label={locale === "de" ? "Playlist oder EP anhängen" : "Attach playlist or EP"} onClick={() => setAttachmentOpen((value) => !value)} className={`flex h-[37px] w-[37px] shrink-0 items-center justify-center rounded-[9px] border border-border-alpha-15 hover:bg-white/10 ${attachmentOpen ? "text-accent" : "text-text-secondary"}`}><LuPaperclip size={16} /></button><input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={4000} placeholder={c.message} aria-label={c.message} className="min-w-0 flex-1 rounded-[10px] border border-border-alpha-15 bg-bg-primary px-[13px] py-[10px] text-[13px] text-text-primary outline-none focus:border-accent" /><button type="submit" disabled={busy || (!draft.trim() && !hasShare)} title={c.send} className="flex h-[37px] w-[37px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white hover:opacity-90 disabled:opacity-40"><LuSend size={17} /></button></form>
             </> : <div className="flex flex-1 flex-col items-center justify-center gap-[12px] px-[20px] text-center text-text-tertiary"><LuUsers size={40} className="opacity-40" /><p className="m-0 text-[14px]">{hasShare ? c.shareHint : c.select}</p></div>}

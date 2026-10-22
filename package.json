@@ -1,6 +1,6 @@
 {
   "name": "@wavo/client",
-  "version": "0.1.50",
+  "version": "0.1.51",
   "type": "module",
   "private": true,
   "description": "Wavo Music Player",
@@ -123,6 +123,7 @@
     "solar-icons": "^0.0.15",
     "soundtouchjs": "^0.3.0",
     "tar": "^7.5.22",
+    "tus-js-client": "^4.3.1",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

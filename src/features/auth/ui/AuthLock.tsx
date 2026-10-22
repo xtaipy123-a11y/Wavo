@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import AppFrame from "@/features/navigation/ui/AppFrame";
 import ListeningSync from "@/features/social/ListeningSync";
+import { takePendingReleaseToken } from "@/app/pendingReleaseLink";
 
 export function AuthLock({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -19,7 +20,8 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
       navigate("/login", { replace: true });
     }
     if (status === "authenticated" && pathname === "/login") {
-      navigate("/", { replace: true });
+      const token = takePendingReleaseToken();
+      navigate(token ? `/uploads?claim=${encodeURIComponent(token)}` : "/", { replace: true });
     }
   }, [pathname, navigate, status]);
 

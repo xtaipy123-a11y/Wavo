@@ -1,4 +1,5 @@
 import type { Track } from "@/shared/types";
+import { getAuthSession } from "@/shared/api/auth-session";
 import type { LyricsCandidate, LyricsSyncLevel } from "@/shared/contracts/lyrics";
 import type { LyricsProviderOption } from "@/features/lyrics/store/lyricsStore";
 import type { UserPlaylist, UserPlaylistItem } from "@/shared/contracts/playlists";
@@ -28,6 +29,15 @@ export interface CachedAudioRecord {
   pinned?: boolean;
   pinnedAt?: number;
   downloadTrack?: Track;
+}
+
+const PRIVATE_AUDIO_PREFIX = "private-audio:";
+function audioStorageKey(trackId: string): string | null {
+  // Internal keys must never be accepted as playable track IDs.
+  if (trackId.startsWith(PRIVATE_AUDIO_PREFIX)) return null;
+  if (!trackId.startsWith("upload:")) return trackId;
+  const userId = getAuthSession()?.user?.id;
+  return userId ? `${PRIVATE_AUDIO_PREFIX}${userId}:${trackId}` : null;
 }
 
 export interface CachedLyricsRecord {
@@ -284,37 +294,41 @@ class WavoDb {
   }
 
   async getAudio(trackId: string): Promise<CachedAudioRecord | null> {
-    const mem = this.memAudio.get(trackId);
+    const key = audioStorageKey(trackId);
+    if (!key) return null;
+    const mem = this.memAudio.get(key);
     if (mem) {
-      this.rememberAudio(trackId, mem);
+      this.rememberAudio(key, mem);
       return mem;
     }
 
     const result = await this.runTransaction("audio", "readonly", (store) => {
       return new Promise<CachedAudioRecord | null>((resolve) => {
-        const req = store.get(trackId);
+        const req = store.get(key);
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
     });
 
     if (result) {
-      this.rememberAudio(trackId, result);
+      this.rememberAudio(key, result);
       return result;
     }
-    return this.memAudio.get(trackId) || null;
+    return this.memAudio.get(key) || null;
   }
 
   async putAudio(trackId: string, blob: Blob, mimeType: string, lastPlayedAt?: number): Promise<void> {
+    const key = audioStorageKey(trackId);
+    if (!key) throw new Error("Private audio requires a signed-in user.");
     const now = Date.now();
     const record = await this.runTransaction("audio", "readwrite", (store) => {
       return new Promise<CachedAudioRecord>((resolve, reject) => {
-        const getRequest = store.get(trackId);
+        const getRequest = store.get(key);
         getRequest.onerror = () => reject(getRequest.error);
         getRequest.onsuccess = () => {
           const existing = getRequest.result as CachedAudioRecord | undefined;
           const next: CachedAudioRecord = {
-            trackId, blob, mimeType, byteSize: blob.size,
+            trackId: key, blob, mimeType, byteSize: blob.size,
             savedAt: existing?.savedAt ?? now,
             lastPlayedAt: lastPlayedAt ?? now,
             pinned: existing?.pinned,
@@ -328,11 +342,11 @@ class WavoDb {
       });
     });
     if (record) {
-      this.rememberAudio(trackId, record);
+      this.rememberAudio(key, record);
     } else {
-      const existing = this.memAudio.get(trackId);
-      this.rememberAudio(trackId, {
-        trackId, blob, mimeType, byteSize: blob.size,
+      const existing = this.memAudio.get(key);
+      this.rememberAudio(key, {
+        trackId: key, blob, mimeType, byteSize: blob.size,
         savedAt: existing?.savedAt ?? now,
         lastPlayedAt: lastPlayedAt ?? now,
         pinned: existing?.pinned,
@@ -343,16 +357,18 @@ class WavoDb {
   }
 
   async pinAudio(track: Track, blob?: Blob): Promise<void> {
+    const key = audioStorageKey(track.id);
+    if (!key) throw new Error("Private audio requires a signed-in user.");
     const now = Date.now();
     const record = await this.runTransaction("audio", "readwrite", (store) => new Promise<CachedAudioRecord>((resolve, reject) => {
-      const getRequest = store.get(track.id);
+      const getRequest = store.get(key);
       getRequest.onerror = () => reject(getRequest.error);
       getRequest.onsuccess = () => {
         const existing = getRequest.result as CachedAudioRecord | undefined;
         const audio = blob ?? existing?.blob;
         if (!audio?.size) { reject(new Error("No complete audio file is available for this song.")); return; }
         const next: CachedAudioRecord = {
-          trackId: track.id,
+          trackId: key,
           blob: audio,
           mimeType: audio.type || existing?.mimeType || "audio/webm",
           byteSize: audio.size,
@@ -368,7 +384,7 @@ class WavoDb {
       };
     }));
     if (!record) throw new Error("The download could not be saved on this device.");
-    this.rememberAudio(track.id, record);
+    this.rememberAudio(key, record);
     await this.putTrack(track);
   }
 
@@ -378,7 +394,9 @@ class WavoDb {
       request.onsuccess = () => resolve(request.result as CachedAudioRecord[]);
       request.onerror = () => reject(request.error);
     }));
-    return (records ?? [...this.memAudio.values()]).filter((record) => record.pinned && record.downloadTrack);
+    const ownPrefix = `${PRIVATE_AUDIO_PREFIX}${getAuthSession()?.user?.id ?? ""}:`;
+    return (records ?? [...this.memAudio.values()]).filter((record) => record.pinned && record.downloadTrack &&
+      (!record.trackId.startsWith(PRIVATE_AUDIO_PREFIX) || record.trackId.startsWith(ownPrefix)));
   }
 
   async clearUnpinnedAudio(): Promise<void> {
@@ -391,7 +409,7 @@ class WavoDb {
     const record = await this.getAudio(trackId);
     if (!record) return;
     record.lastPlayedAt = Date.now();
-    this.rememberAudio(trackId, record);
+    this.rememberAudio(record.trackId, record);
 
     await this.runTransaction("audio", "readwrite", (store) => {
       return new Promise<void>((resolve) => {
@@ -431,25 +449,29 @@ class WavoDb {
   }
 
   async hasAudio(trackId: string): Promise<boolean> {
-    if (this.memAudio.has(trackId)) return true;
+    const key = audioStorageKey(trackId);
+    if (!key) return false;
+    if (this.memAudio.has(key)) return true;
 
     const result = await this.runTransaction("audio", "readonly", (store) => {
       return new Promise<boolean>((resolve) => {
-        const req = store.count(IDBKeyRange.only(trackId));
+        const req = store.count(IDBKeyRange.only(key));
         req.onsuccess = () => resolve(req.result > 0);
         req.onerror = () => resolve(false);
       });
     });
 
-    return result ?? this.memAudio.has(trackId);
+    return result ?? this.memAudio.has(key);
   }
 
   async deleteAudio(trackId: string): Promise<void> {
-    this.memAudio.delete(trackId);
+    const key = trackId.startsWith(PRIVATE_AUDIO_PREFIX) ? trackId : audioStorageKey(trackId);
+    if (!key) return;
+    this.memAudio.delete(key);
 
     await this.runTransaction("audio", "readwrite", (store) => {
       return new Promise<void>((resolve) => {
-        const req = store.delete(trackId);
+        const req = store.delete(key);
         req.onsuccess = () => resolve();
         req.onerror = () => resolve();
       });

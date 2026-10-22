@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach } from "vitest";
 import { wavoDb } from "./wavoDb";
 import { audioCache } from "./audioCache";
+import { setAuthSession } from "@/shared/api/auth-session";
 
 describe("wavoDb storage layer", () => {
   beforeEach(async () => {
@@ -38,6 +39,23 @@ describe("wavoDb storage layer", () => {
     await audioCache.deleteAudio("track_audio_1");
     const hasAudioAfter = await audioCache.hasAudio("track_audio_1");
     expect(hasAudioAfter).toBe(false);
+  });
+
+  it("keeps private upload audio separate when accounts change on one device", async () => {
+    const login = (id: string) => setAuthSession({ accessToken: "", refreshToken: "", accessTokenExpiresAt: "",
+      expiresAt: 0, user: { id, email: "", username: null, displayName: null, avatarUrl: null, bio: null } });
+    const uploadId = "upload:11111111-1111-4111-8111-111111111111";
+    const firstUser = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    try {
+      login(firstUser);
+      await wavoDb.putAudio(uploadId, new Blob(["private"], { type: "audio/mpeg" }), "audio/mpeg");
+      expect(await wavoDb.hasAudio(uploadId)).toBe(true);
+      login("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+      expect(await wavoDb.getAudio(uploadId)).toBeNull();
+      expect(await wavoDb.getAudio(`private-audio:${firstUser}:${uploadId}`)).toBeNull();
+      login(firstUser);
+      expect((await wavoDb.getAudio(uploadId))?.byteSize).toBe(7);
+    } finally { setAuthSession(null); }
   });
 
   it("stores lyrics and updates weekly checked timestamp", async () => {

@@ -30,6 +30,7 @@ export interface SocialMessage {
   recipient_id: string;
   body: string;
   playlist_snapshot: SharedPlaylist | null;
+  release_id: string | null;
   created_at: string;
 }
 
@@ -146,7 +147,7 @@ export const socialClient = {
     const id = myId();
     const { data, error } = await getSupabaseClient()
       .from("wavo_messages")
-      .select("id,sender_id,recipient_id,body,playlist_snapshot,created_at")
+      .select("id,sender_id,recipient_id,body,playlist_snapshot,release_id,created_at")
       .or(`and(sender_id.eq.${id},recipient_id.eq.${friendId}),and(sender_id.eq.${friendId},recipient_id.eq.${id})`)
       .order("created_at", { ascending: false })
       .limit(100);
