@@ -1,5 +1,47 @@
 @import "tailwindcss";
 
+.wavo-mobile-frame {
+  flex-direction: column-reverse;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 0;
+}
+
+.wavo-mobile-frame .wavo-mobile-nav {
+  width: 100%;
+  height: calc(62px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (max-width: 650px) {
+  .wavo-mobile-frame .wavo-playlist-layout {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 10px;
+  }
+
+  .wavo-mobile-frame .wavo-playlist-sidebar {
+    width: 100%;
+    padding: 8px 0 0;
+  }
+
+  .wavo-mobile-frame .wavo-playlist-sidebar > aside {
+    position: static;
+    width: 100%;
+  }
+
+  .wavo-mobile-frame .wavo-playlist-sidebar .wavo-entity-cover {
+    width: 96px;
+    height: 96px;
+  }
+
+  .wavo-mobile-frame .wavo-playlist-tracks {
+    height: auto;
+    min-height: 0;
+    padding: 10px 0 18px;
+  }
+}
+
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
 
 :root[data-wavo-compact="true"] .wavo-song-card { padding-top: 4px !important; padding-bottom: 4px !important; }

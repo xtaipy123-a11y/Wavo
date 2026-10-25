@@ -8,6 +8,13 @@
 /dist
 /dist-electron
 /release
+/android/.gradle/
+/android/.idea/
+/android/build/
+/android/app/build/
+/android/local.properties
+*.keystore
+*.jks
 **/dist/
 **/dist-electron/
 **/release/

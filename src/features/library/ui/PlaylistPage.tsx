@@ -21,6 +21,7 @@ import Button from "@/shared/ui/Button";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
 import CoverImage from "@/features/covers/ui/CoverImage";
+import PlaylistSuggestions from "./PlaylistSuggestions";
 import { useModalStore } from "../store/modalStore";
 import {
   usePlaylist,
@@ -471,9 +472,9 @@ function LibraryPlaylistContent() {
               isReady ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           >
-            <div className="relative z-10 flex flex-row items-stretch gap-[16px] pl-[32px] pr-[16px] h-full w-full min-h-0 box-border">
+            <div className="wavo-playlist-layout relative z-10 flex flex-row items-stretch gap-[16px] pl-[32px] pr-[16px] h-full w-full min-h-0 box-border">
               <div
-                className="shrink-0 w-[280px] self-start pt-[56px] pb-[24px]"
+                className="wavo-playlist-sidebar shrink-0 w-[280px] self-start pt-[56px] pb-[24px]"
                 data-no-window-drag
               >
                 <EntitySidebar
@@ -783,7 +784,7 @@ function LibraryPlaylistContent() {
                     targetScrollTopRef.current = null;
                   }
                 }}
-                className="min-w-0 flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden px-[8px] pt-[56px] pb-[24px] overscroll-contain"
+                className="wavo-playlist-tracks min-w-0 flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden px-[8px] pt-[56px] pb-[24px] overscroll-contain"
                 style={{ willChange: "scroll-position" }}
               >
               {currentTracks.length === 0 ? (
@@ -884,6 +885,10 @@ function LibraryPlaylistContent() {
                   );
                 })}
               </div>
+              )}
+
+              {!isLikesMode && decodedId && currentTracks.length > 0 && (
+                <PlaylistSuggestions key={decodedId} playlistId={decodedId} tracks={currentTracks} />
               )}
 
               {isDragging && draggedItem && (

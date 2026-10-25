@@ -17,6 +17,7 @@ import scanlinesLogo from "@/assets/branding/logo-scanlines.svg";
 import vhsLogo from "@/assets/branding/logo-vhs.svg";
 import { useTranslation } from "@/languages";
 import { useTheme } from "next-themes";
+import { Capacitor } from "@capacitor/core";
 import { usePlayerStore, type AccentVariant } from "@/features/player";
 import { useModalStore } from "@/features/library";
 import { useCustomizationStore, getBlockStyle } from "@/features/settings";
@@ -169,6 +170,23 @@ function Sidebar({ searchOpen, onSearchToggle }: SidebarProps) {
   const sidebarConfig = useCustomizationStore((state) => state.sidebar);
   const hasCustomBg = Boolean(backgroundImage && isDark);
   const sidebarStyle = getBlockStyle(sidebarConfig, isDark, hasCustomBg);
+
+  if (Capacitor.isNativePlatform()) {
+    return (
+      <nav className="flex h-full w-full items-center justify-around rounded-xl bg-bg-primary px-[4px]" aria-label="Wavo">
+        {sidebarNavItems.map((item) => {
+          const active = isItemActive(item.id, item.href);
+          const Icon = item.Icon;
+          const label = t(`common.sidebar.${item.id}`) || item.label;
+          const className = `flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] border-0 bg-transparent py-[5px] text-[10px] ${active ? "text-text-primary" : "text-text-tertiary"}`;
+          const content = <><Icon size={22} /><span className="truncate">{label}</span></>;
+          if (item.id === "search") return <button key={item.id} type="button" onClick={onSearchToggle} aria-label={label} className={className}>{content}</button>;
+          if (item.id === "settings") return <button key={item.id} type="button" onClick={toggleSettings} aria-label={label} className={className}>{content}</button>;
+          return <Link key={item.id} to={item.href!} onClick={() => { closeSearch(); closeSettings(); }} aria-current={active ? "page" : undefined} className={className}>{content}</Link>;
+        })}
+      </nav>
+    );
+  }
 
   return (
     <aside className="h-full">

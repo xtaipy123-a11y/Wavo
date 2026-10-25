@@ -1,4 +1,10 @@
-# Neu in Wavo 0.1.53
+# Neu in Wavo 0.1.54
+
+- Eigene Playlists zeigen jetzt passende Songvorschläge aus der vorhandenen Musikquelle. Ein Klick auf **+** fügt den Song direkt hinzu; bereits enthaltene Songs und doppelte Vorschläge werden ausgeblendet.
+- Mit **Neue Vorschläge** lassen sich weitere Titel entdecken.
+- Ein Android-Projekt ist vorbereitet. Eine lokale Debug-APK kann mit dem Android SDK gebaut werden; die Android-Laufzeit ist noch nicht vollständig auf einem Emulator verifiziert.
+
+## Seit 0.1.53
 
 - Eigene Songs werden nach dem Dateiupload wieder in der Bibliothek gespeichert. Der Fehler „new row violates row-level security policy for table wavo_uploads“ ist behoben.
 - Die privaten Supabase-Zugriffsregeln bleiben bestehen; für dieses Update ist keine SQL-Migration nötig.

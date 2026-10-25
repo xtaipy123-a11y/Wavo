@@ -45,7 +45,7 @@ export function EntitySidebar({
       )}
 
       <div
-        className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md ${
+        className={`wavo-entity-cover relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md ${
           coverClassName || "bg-border-alpha-14"
         } ${onBack ? "mt-[16px]" : ""}`}
       >

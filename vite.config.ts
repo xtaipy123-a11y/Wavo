@@ -18,7 +18,7 @@ export default defineConfig(({ command, mode }) => {
   plugins: [
     react(),
     tailwindcss(),
-    electron({
+    ...(mode === "android" ? [] : [electron({
       main: {
         entry: "electron/main.ts",
       },
@@ -35,7 +35,7 @@ export default defineConfig(({ command, mode }) => {
           },
         },
       },
-    }),
+    })]),
   ],
   clearScreen: false,
   resolve: {

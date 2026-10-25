@@ -55,6 +55,7 @@ import {
 import { SettingsModal, useCustomizationStore, getBlockStyle } from "@/features/settings";
 import { UpdateControl, UpdateModal } from "@/features/updater";
 import ListeningBanner from "@/features/social/ListeningBanner";
+import { Capacitor } from "@capacitor/core";
 
 
 interface AppFrameProps {
@@ -73,6 +74,7 @@ const LEGACY_LAYOUT_STORAGE_KEYS = [
 ] as const;
 
 export default function AppFrame({ children }: AppFrameProps) {
+  const isNativeMobile = Capacitor.isNativePlatform();
   const location = useLocation();
   const { pathname, search } = location;
   const navigate = useNavigate();
@@ -684,7 +686,7 @@ export default function AppFrame({ children }: AppFrameProps) {
     <div
       ref={appFrameRef}
       data-custom-bg={hasCustomBg ? "true" : undefined}
-      className="relative flex flex-row h-full w-full overflow-hidden rounded-5xl bg-bg-canvas p-1.5 gap-1.5"
+      className={`relative flex flex-row h-full w-full overflow-hidden rounded-5xl bg-bg-canvas p-1.5 gap-1.5 ${isNativeMobile ? "wavo-mobile-frame" : ""}`}
       onScroll={(e) => {
         if (e.currentTarget.scrollLeft !== 0) e.currentTarget.scrollLeft = 0;
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
@@ -715,7 +717,7 @@ export default function AppFrame({ children }: AppFrameProps) {
 
       <aside
         ref={sidebarRef}
-        className="w-[58px] h-full shrink-0 z-[45] relative"
+        className={isNativeMobile ? "wavo-mobile-nav shrink-0 z-[45] relative" : "w-[58px] h-full shrink-0 z-[45] relative"}
       >
         <Sidebar
           searchOpen={searchOpen}
@@ -773,7 +775,7 @@ export default function AppFrame({ children }: AppFrameProps) {
                   exit={{ x: RIGHT_DRAWER_WIDTH }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   className="pointer-events-auto absolute inset-y-0 right-0 z-[50]"
-                  style={{ width: RIGHT_DRAWER_WIDTH }}
+                  style={{ width: isNativeMobile ? "min(440px, 100%)" : RIGHT_DRAWER_WIDTH }}
                 >
                   <RightDrawer
                     activeTab={rightDrawerTab}
@@ -839,7 +841,7 @@ export default function AppFrame({ children }: AppFrameProps) {
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className={`absolute right-0 z-[60] flex flex-col items-center pointer-events-none pt-[56px]`}
             style={{
-              left: SIDEBAR_WIDTH + SHELL_EDGE_GAP,
+              left: isNativeMobile ? SHELL_EDGE_GAP : SIDEBAR_WIDTH + SHELL_EDGE_GAP,
               right: SHELL_EDGE_GAP,
               top: 12,
             }}
@@ -1069,8 +1071,8 @@ export default function AppFrame({ children }: AppFrameProps) {
       <ImportReviewModal />
       <SettingsModal />
       <UpdateModal />
-      {!isFullscreenPlayer && <UpdateControl />}
-      <WindowControls
+      {!isFullscreenPlayer && !isNativeMobile && <UpdateControl />}
+      {!isNativeMobile && <WindowControls
         isFullscreen={isFullscreenPlayer}
         style={{
           top: isFullscreenPlayer ? 12 : 18,
@@ -1078,7 +1080,7 @@ export default function AppFrame({ children }: AppFrameProps) {
           transition: "all 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
           zIndex: 80,
         }}
-      />
+      />}
     </div>
   );
 }

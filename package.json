@@ -1,6 +1,6 @@
 {
   "name": "@wavo/client",
-  "version": "0.1.53",
+  "version": "0.1.54",
   "type": "module",
   "private": true,
   "description": "Wavo Music Player",
@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:android": "tsc -b && vite build --mode android && cap sync android",
+    "android:open": "cap open android",
     "signer:build": "node ../signer/scripts/build-wasm.mjs",
     "preview": "vite preview",
     "test": "vitest run",
@@ -104,6 +106,8 @@
   "dependencies": {
     "@braccato/core": "^1.4.0",
     "@braccato/parsers": "^0.2.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@mingcute/react": "^1.4.1",
     "@solar-icons/react": "^1.1.1",
     "@supabase/ssr": "^0.12.7",
@@ -127,6 +131,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
