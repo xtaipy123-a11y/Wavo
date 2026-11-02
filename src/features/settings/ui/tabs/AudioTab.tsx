@@ -4,9 +4,10 @@ import { useToast } from "@/shared/ui";
 import Button from "@/shared/ui/Button";
 import { useTranslation } from "@/languages";
 import { usePlayerStore, type AudioQuality } from "@/features/player";
-import { Select } from "@/shared/ui";
+import { Select, ToggleSwitch } from "@/shared/ui";
 import { useConnectivityStore } from "@/features/connectivity";
 import { SettingRow, SettingSection } from "../controls";
+import { useAutomaticDownloadStore } from "@/features/downloads/automaticDownloads";
 
 export function AudioTab({ searchQuery }: { searchQuery?: string }) {
   const { t } = useTranslation();
@@ -15,6 +16,9 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
   const [dumpExported, setDumpExported] = useState(false);
   const audioQuality = usePlayerStore((state) => state.audioQuality);
   const setAudioQuality = usePlayerStore((state) => state.setAudioQuality);
+  const autoFavorites = useAutomaticDownloadStore((state) => state.favorites);
+  const autoPlaylists = useAutomaticDownloadStore((state) => state.playlists);
+  const setAutoDownload = useAutomaticDownloadStore((state) => state.setEnabled);
   const connRunning = useConnectivityStore((s) => s.running);
   const connChecks = useConnectivityStore((s) => s.checks);
   const connLastRunAt = useConnectivityStore((s) => s.lastRunAt);
@@ -54,6 +58,25 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
               <span />
             )
           }
+        />
+      </SettingSection>
+
+      <SettingSection label={t("settings.offline_downloads.title")}>
+        <SettingRow
+          title={t("settings.offline_downloads.favorites")}
+          description={t("settings.offline_downloads.favorites_description")}
+          titleKey="settings.offline_downloads.favorites"
+          descKey="settings.offline_downloads.favorites_description"
+          searchQuery={searchQuery}
+          control={<ToggleSwitch checked={autoFavorites} onChange={(enabled) => setAutoDownload("favorites", enabled)} ariaLabel={t("settings.offline_downloads.favorites")} />}
+        />
+        <SettingRow
+          title={t("settings.offline_downloads.playlists")}
+          description={t("settings.offline_downloads.playlists_description")}
+          titleKey="settings.offline_downloads.playlists"
+          descKey="settings.offline_downloads.playlists_description"
+          searchQuery={searchQuery}
+          control={<ToggleSwitch checked={autoPlaylists} onChange={(enabled) => setAutoDownload("playlists", enabled)} ariaLabel={t("settings.offline_downloads.playlists")} />}
         />
       </SettingSection>
 

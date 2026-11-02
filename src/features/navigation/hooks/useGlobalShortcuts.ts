@@ -1,29 +1,15 @@
 import { useEffect, useRef } from "react";
 import { playerEngine, usePlayerStore, toVolumeGain, toVolumeLevel } from "@/features/player";
-import { useShortcutsStore, matchesShortcut } from "@/features/shortcuts";
-import {
-  isBlockingOverlayOpen,
-  isKeyHandledByFocusedControl,
-  isTypingTarget,
-} from "../utils/shortcutGuards";
+import { useShortcutsStore, matchesShortcut, getShortcutActivationScope, type MainAppShortcutsSettings } from "@/features/shortcuts";
+import { useNativeShortcutSync } from "@/features/shortcuts/hooks/useNativeShortcutSync";
+import { isBlockingOverlayOpen, isKeyHandledByFocusedControl, isTypingTarget } from "../utils/shortcutGuards";
 
 const VOLUME_STEP = 0.05;
 const SEEK_STEP_MS = 5_000;
 const DEFAULT_UNMUTE_LEVEL = 0.7;
-
-function roundToPercent(level: number): number {
-  return Math.round(level * 100) / 100;
-}
-
-const REPEATABLE_CODES = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-]);
+const REPEATABLE_CODES = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 export type RightPanelTab = "queue" | "lyrics";
-
 export interface GlobalShortcutsOptions {
   enabled?: boolean;
   searchOpen: boolean;
@@ -42,162 +28,103 @@ export interface GlobalShortcutsOptions {
 export function useGlobalShortcuts(options: GlobalShortcutsOptions): void {
   const optionsRef = useRef(options);
   optionsRef.current = options;
-
   const lastUnmutedLevelRef = useRef(DEFAULT_UNMUTE_LEVEL);
+  useNativeShortcutSync();
 
   useEffect(() => {
+    const runAction = (action: keyof MainAppShortcutsSettings) => {
+      const opts = optionsRef.current;
+      const state = usePlayerStore.getState();
+      switch (action) {
+        case "playPause": void playerEngine.togglePlayPause(); break;
+        case "nextTrack": void playerEngine.skipNext(); break;
+        case "prevTrack": void playerEngine.skipPrevious(); break;
+        case "toggleFullscreen":
+          if (opts.fullscreenOpen) opts.closeFullscreen();
+          else if (state.currentTrack !== null && state.status !== "idle") opts.openFullscreen();
+          break;
+        case "toggleQueue":
+        case "toggleLyrics": {
+          const tab = action === "toggleQueue" ? "queue" : "lyrics";
+          if (opts.rightPanelOpen && opts.rightPanelTab === tab) opts.closeRightPanel();
+          else opts.openRightPanel(tab);
+          break;
+        }
+        case "search": opts.openSearch(); break;
+        case "toggleMute": {
+          const level = toVolumeLevel(state.volume);
+          if (level > 0) {
+            lastUnmutedLevelRef.current = level;
+            playerEngine.setVolume(0);
+          } else playerEngine.setVolume(toVolumeGain(lastUnmutedLevelRef.current || DEFAULT_UNMUTE_LEVEL));
+          break;
+        }
+        case "seekBackward": playerEngine.seek(Math.max(0, state.positionMs - SEEK_STEP_MS)); break;
+        case "seekForward":
+          playerEngine.seek(Math.min(state.durationMs > 0 ? state.durationMs : state.positionMs + SEEK_STEP_MS, state.positionMs + SEEK_STEP_MS));
+          break;
+        case "volumeUp":
+        case "volumeDown": {
+          const level = toVolumeLevel(state.volume);
+          const delta = action === "volumeUp" ? VOLUME_STEP : -VOLUME_STEP;
+          const next = Math.round(Math.min(1, Math.max(0, level + delta)) * 100) / 100;
+          playerEngine.setVolume(toVolumeGain(next));
+          if (next > 0) lastUnmutedLevelRef.current = next;
+          break;
+        }
+      }
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       const opts = optionsRef.current;
-      if (opts.enabled === false) return;
-      if (event.defaultPrevented) return;
-      if (useShortcutsStore.getState().isRecording) return;
-
-      // ignore shortcuts if window does not have focus
-      if (
-        typeof document !== "undefined" &&
-        typeof document.hasFocus === "function" &&
-        process.env.NODE_ENV !== "test" &&
-        !document.hasFocus()
-      ) {
-        return;
-      }
-
+      const settings = useShortcutsStore.getState();
+      if (opts.enabled === false || event.defaultPrevented || settings.isRecording) return;
+      if (typeof document.hasFocus === "function" && process.env.NODE_ENV !== "test" && !document.hasFocus()) return;
       const { code } = event;
       if (event.repeat && !REPEATABLE_CODES.has(code)) return;
-
       if (code === "Escape" || event.key === "Escape") {
         if (isBlockingOverlayOpen()) return;
-        if (opts.searchOpen) {
+        if (opts.searchOpen) { event.preventDefault(); event.stopPropagation(); opts.closeSearch(); }
+        else if (opts.rightPanelOpen) { event.preventDefault(); event.stopPropagation(); opts.closeRightPanel(); }
+        else if (opts.fullscreenOpen) { event.preventDefault(); event.stopPropagation(); opts.closeFullscreen(); }
+        else if (opts.onEscapeFallback?.()) { event.preventDefault(); event.stopPropagation(); }
+        return;
+      }
+      if (isTypingTarget(event.target) || isBlockingOverlayOpen() || isKeyHandledByFocusedControl(event.target, code)) return;
+      for (const action of ["toggleOverlay", "quickLikeSong"] as const) {
+        if (getShortcutActivationScope(settings, "global", action) === "app" && matchesShortcut(event, settings.global[action])) {
           event.preventDefault();
-          event.stopPropagation();
-          opts.closeSearch();
+          if (action === "toggleOverlay") void window.wavoElectron?.toggleOverlay?.();
+          else window.wavoElectron?.sendOverlayAction?.({ type: "like" });
           return;
         }
-        if (opts.rightPanelOpen) {
-          event.preventDefault();
-          event.stopPropagation();
-          opts.closeRightPanel();
-          return;
-        }
-        if (opts.fullscreenOpen) {
-          event.preventDefault();
-          event.stopPropagation();
-          opts.closeFullscreen();
-          return;
-        }
-        if (opts.onEscapeFallback?.()) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
       }
-
-      if (isTypingTarget(event.target)) return;
-      if (isBlockingOverlayOpen()) return;
-      if (isKeyHandledByFocusedControl(event.target, code)) return;
-
-      const { mainApp } = useShortcutsStore.getState();
-
-      if (matchesShortcut(event, mainApp.playPause)) {
+      for (const action of Object.keys(settings.mainApp) as (keyof MainAppShortcutsSettings)[]) {
+        if (!matchesShortcut(event, settings.mainApp[action])) continue;
         event.preventDefault();
-        playerEngine.togglePlayPause();
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.nextTrack)) {
-        event.preventDefault();
-        void playerEngine.skipNext();
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.prevTrack)) {
-        event.preventDefault();
-        void playerEngine.skipPrevious();
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.toggleFullscreen)) {
-        event.preventDefault();
-        if (opts.fullscreenOpen) {
-          opts.closeFullscreen();
-        } else {
-          const { currentTrack, status } = usePlayerStore.getState();
-          if (currentTrack !== null && status !== "idle") {
-            opts.openFullscreen();
-          }
-        }
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.toggleQueue)) {
-        event.preventDefault();
-        if (opts.rightPanelOpen && opts.rightPanelTab === "queue") opts.closeRightPanel();
-        else opts.openRightPanel("queue");
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.toggleLyrics)) {
-        event.preventDefault();
-        if (opts.rightPanelOpen && opts.rightPanelTab === "lyrics") opts.closeRightPanel();
-        else opts.openRightPanel("lyrics");
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.toggleMute)) {
-        event.preventDefault();
-        const level = toVolumeLevel(usePlayerStore.getState().volume);
-        if (level > 0) {
-          lastUnmutedLevelRef.current = level;
-          playerEngine.setVolume(0);
-        } else {
-          playerEngine.setVolume(
-            toVolumeGain(lastUnmutedLevelRef.current || DEFAULT_UNMUTE_LEVEL),
-          );
-        }
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.search)) {
-        event.preventDefault();
-        opts.openSearch();
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.seekBackward)) {
-        event.preventDefault();
-        const { positionMs } = usePlayerStore.getState();
-        playerEngine.seek(Math.max(0, positionMs - SEEK_STEP_MS));
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.seekForward)) {
-        event.preventDefault();
-        const { positionMs, durationMs } = usePlayerStore.getState();
-        const upperBound = durationMs > 0 ? durationMs : positionMs + SEEK_STEP_MS;
-        playerEngine.seek(Math.min(upperBound, positionMs + SEEK_STEP_MS));
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.volumeUp)) {
-        event.preventDefault();
-        const level = toVolumeLevel(usePlayerStore.getState().volume);
-        const nextLevel = roundToPercent(Math.min(1, level + VOLUME_STEP));
-        playerEngine.setVolume(toVolumeGain(nextLevel));
-        if (nextLevel > 0) lastUnmutedLevelRef.current = nextLevel;
-        return;
-      }
-
-      if (matchesShortcut(event, mainApp.volumeDown)) {
-        event.preventDefault();
-        const level = toVolumeLevel(usePlayerStore.getState().volume);
-        const nextLevel = roundToPercent(Math.max(0, level - VOLUME_STEP));
-        playerEngine.setVolume(toVolumeGain(nextLevel));
-        if (nextLevel > 0) lastUnmutedLevelRef.current = nextLevel;
+        // Native callbacks already deliver registered system-wide shortcuts.
+        if (!settings.nativeRegistration.registered.includes(`mainApp-${action}`)) runAction(action);
         return;
       }
     };
 
+    const unsubscribeNative = window.wavoElectron?.onNativeShortcut?.((id) => {
+      const settings = useShortcutsStore.getState();
+      if (optionsRef.current.enabled === false || settings.isRecording) return;
+      if (id.startsWith("mainApp-")) {
+        const action = id.slice("mainApp-".length) as keyof MainAppShortcutsSettings;
+        if (action in settings.mainApp && getShortcutActivationScope(settings, "mainApp", action) === "global") runAction(action);
+      } else if (id.startsWith("miniplayer-")) {
+        const action = id.slice("miniplayer-".length);
+        if (getShortcutActivationScope(settings, "miniplayer", action) !== "global") return;
+        if (action === "likeTrack") window.wavoElectron?.sendOverlayAction?.({ type: "like" });
+        else if (action in settings.mainApp) runAction(action as keyof MainAppShortcutsSettings);
+      }
+    });
     document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      unsubscribeNative?.();
+    };
   }, []);
 }

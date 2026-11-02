@@ -10,6 +10,8 @@ import { clientCatalog } from "./clientCatalog";
 import { innertubeCatalog } from "@/shared/media/innertube";
 import { localMusic } from "./localMusic";
 import { localPlaylists } from "./localPlaylists";
+import { toClientTrack } from "./track";
+import { requestAutomaticDownload } from "@/shared/events/offlineDownloads";
 import { streamPublicLyrics } from "./publicLyrics";
 import { getLocalImportHandler } from "./localImports";
 import type { Track } from "@/shared/contracts";
@@ -691,13 +693,15 @@ export const api = {
       } : hinted || await clientCatalog.resolveSnapshot(id);
       if (!track) throw new Error("Track details could not be loaded.");
       localMusic.likeTrack(track);
+      requestAutomaticDownload("favorites", [toClientTrack(track)]);
       return;
     }
     const track = await clientCatalog.resolveSnapshot(id);
-    return request<void>(
+    await request<void>(
       `/v1/me/library/tracks/${encodeURIComponent(id)}`,
       { method: "PUT", ...(track ? { body: JSON.stringify({ track, trackSnapshot: track }) } : {}) },
     );
+    if (track) requestAutomaticDownload("favorites", [toClientTrack(track)]);
   },
 
   unlikeTrack(id: string): Promise<void> {
@@ -807,25 +811,31 @@ export const api = {
     const track = snapshot ?? (await clientCatalog.resolveSnapshot(trackId));
     if (!musicApiAcceptsSupabaseJwt()) {
       if (!track) throw new Error("Track could not be found.");
-      return localPlaylists.addTrack(playlistId, track);
+      const item = await localPlaylists.addTrack(playlistId, track);
+      requestAutomaticDownload("playlists", [toClientTrack(item.track)]);
+      return item;
     }
-    return request<ApiUserPlaylistItem>(
+    const item = await request<ApiUserPlaylistItem>(
       `/v1/me/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`,
       { method: "POST", ...(track ? { body: JSON.stringify({ track, trackSnapshot: track }) } : {}) },
     );
+    requestAutomaticDownload("playlists", [toClientTrack(item.track)]);
+    return item;
   },
 
-  addPlaylistTrackSnapshots(
+  async addPlaylistTrackSnapshots(
     playlistId: string,
     tracks: ApiTrackBase[],
   ): Promise<{ items: ApiUserPlaylistItem[]; added: number; rejected: number }> {
-    if (!musicApiAcceptsSupabaseJwt()) return localPlaylists.addTracks(playlistId, tracks);
-    return request<{ items: ApiUserPlaylistItem[]; added: number; rejected: number }>(
+    const result = !musicApiAcceptsSupabaseJwt() ? await localPlaylists.addTracks(playlistId, tracks)
+      : await request<{ items: ApiUserPlaylistItem[]; added: number; rejected: number }>(
       `/v1/me/playlists/${encodeURIComponent(playlistId)}/tracks`,
       { method: "POST", body: JSON.stringify({ tracks }) },
       true,
       60_000,
     );
+    requestAutomaticDownload("playlists", result.items.map((item) => toClientTrack(item.track)));
+    return result;
   },
 
   removePlaylistItem(playlistId: string, itemId: string): Promise<void> {

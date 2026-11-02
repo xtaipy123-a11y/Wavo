@@ -9,6 +9,8 @@ export interface OverlaySettings {
   position: OverlayPosition;
   shortcut: string;
   likeShortcut?: string;
+  shortcutGlobal?: boolean;
+  likeShortcutGlobal?: boolean;
   autoShowOnMinimize: boolean;
   alwaysOnTop: boolean;
 }
@@ -59,6 +61,8 @@ export class OverlayManager {
   private shortcut = "Alt+Shift+O";
   private likeShortcut = "Alt+Shift+L";
   private shortcutsPaused = false;
+  private shortcutGlobal = true;
+  private likeShortcutGlobal = true;
   private currentRegisteredShortcut: string | null = null;
   private currentRegisteredLikeShortcut: string | null = null;
   private autoShowOnMinimize = true;
@@ -92,6 +96,8 @@ export class OverlayManager {
         const raw = fs.readFileSync(filePath, "utf-8");
         const data = JSON.parse(raw);
         if (typeof data.enabled === "boolean") this.enabled = data.enabled;
+        if (typeof data.shortcutGlobal === "boolean") this.shortcutGlobal = data.shortcutGlobal;
+        if (typeof data.likeShortcutGlobal === "boolean") this.likeShortcutGlobal = data.likeShortcutGlobal;
         if (
           data.position === "top-left" ||
           data.position === "top-center" ||
@@ -126,6 +132,8 @@ export class OverlayManager {
         position: this.position,
         shortcut: this.shortcut,
         likeShortcut: this.likeShortcut,
+        shortcutGlobal: this.shortcutGlobal,
+        likeShortcutGlobal: this.likeShortcutGlobal,
         autoShowOnMinimize: this.autoShowOnMinimize,
         alwaysOnTop: this.alwaysOnTop,
       };
@@ -187,10 +195,26 @@ export class OverlayManager {
     } else {
       if (this.enabled) {
         this.registerShortcut();
-      } else {
-        this.registerLikeShortcut();
       }
+      this.registerLikeShortcut();
     }
+  }
+
+  public configureShortcutScopes(shortcut: string, likeShortcut: string, shortcutGlobal: boolean, likeShortcutGlobal: boolean) {
+    this.shortcut = shortcut;
+    this.likeShortcut = likeShortcut;
+    this.shortcutGlobal = shortcutGlobal;
+    this.likeShortcutGlobal = likeShortcutGlobal;
+    this.registerShortcut();
+    this.registerLikeShortcut();
+    this.savePersistedSettings();
+  }
+
+  public getRegisteredShortcutIds(): string[] {
+    return [
+      ...(this.currentRegisteredShortcut ? ["global-toggleOverlay"] : []),
+      ...(this.currentRegisteredLikeShortcut ? ["global-quickLikeSong"] : []),
+    ];
   }
 
   public registerShortcut(newShortcut?: string) {
@@ -202,7 +226,7 @@ export class OverlayManager {
 
     this.unregisterShortcut();
 
-    if (this.shortcutsPaused || !this.enabled || !this.shortcut) return;
+    if (this.shortcutsPaused || !this.enabled || !this.shortcut || !this.shortcutGlobal) return;
 
     try {
       const ok = globalShortcut.register(this.shortcut, () => {
@@ -229,11 +253,6 @@ export class OverlayManager {
       } catch {}
       this.currentRegisteredShortcut = null;
     }
-    if (this.shortcut) {
-      try {
-        globalShortcut.unregister(this.shortcut);
-      } catch {}
-    }
   }
 
   public registerLikeShortcut(newShortcut?: string) {
@@ -245,7 +264,7 @@ export class OverlayManager {
 
     this.unregisterLikeShortcut();
 
-    if (this.shortcutsPaused || !this.likeShortcut) return;
+    if (this.shortcutsPaused || !this.likeShortcut || !this.likeShortcutGlobal) return;
 
     try {
       const ok = globalShortcut.register(this.likeShortcut, () => {
@@ -274,11 +293,6 @@ export class OverlayManager {
         globalShortcut.unregister(this.currentRegisteredLikeShortcut);
       } catch {}
       this.currentRegisteredLikeShortcut = null;
-    }
-    if (this.likeShortcut) {
-      try {
-        globalShortcut.unregister(this.likeShortcut);
-      } catch {}
     }
   }
 
@@ -615,6 +629,14 @@ export class OverlayManager {
 
     ipcMain.on("overlay:update-settings", (_event, settings: Partial<OverlaySettings>) => {
       if (!settings || typeof settings !== "object") return;
+      if (typeof settings.shortcutGlobal === "boolean" && settings.shortcutGlobal !== this.shortcutGlobal) {
+        this.shortcutGlobal = settings.shortcutGlobal;
+        this.registerShortcut();
+      }
+      if (typeof settings.likeShortcutGlobal === "boolean" && settings.likeShortcutGlobal !== this.likeShortcutGlobal) {
+        this.likeShortcutGlobal = settings.likeShortcutGlobal;
+        this.registerLikeShortcut();
+      }
 
       if (typeof settings.enabled === "boolean") {
         this.enabled = settings.enabled;

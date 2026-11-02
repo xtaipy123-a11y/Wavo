@@ -7,11 +7,18 @@ import {
   type MainAppShortcutsSettings,
   type MiniplayerShortcutsSettings,
   type ShortcutScope,
+  type ShortcutActivationScope,
+  type ShortcutRegistrationResult,
+  getShortcutActivationScope,
 } from "../types";
 import { normalizeShortcutToEnglish } from "../utils/shortcutMatching";
 import { useOverlaySettingsStore } from "@/features/overlay/store/overlaySettingsStore";
 
 interface ShortcutsStoreState extends ShortcutsSettings {
+  activationScopes: Record<string, ShortcutActivationScope>;
+  nativeRegistration: ShortcutRegistrationResult;
+  setActivationScope: (scope: ShortcutScope, action: string, value: ShortcutActivationScope) => void;
+  setNativeRegistration: (result: ShortcutRegistrationResult) => void;
   isRecording: boolean;
   setIsRecording: (recording: boolean) => void;
   setGlobalShortcut: (action: keyof GlobalShortcutsSettings, rawShortcut: string) => void;
@@ -22,11 +29,13 @@ interface ShortcutsStoreState extends ShortcutsSettings {
   resetAll: () => void;
 }
 
-function notifyElectronGlobalShortcuts(global: GlobalShortcutsSettings) {
+function notifyElectronGlobalShortcuts(global: GlobalShortcutsSettings, activationScopes: Record<string, ShortcutActivationScope> = {}) {
   if (typeof window !== "undefined" && window.wavoElectron?.updateOverlaySettings) {
     window.wavoElectron.updateOverlaySettings({
       shortcut: global.toggleOverlay,
       likeShortcut: global.quickLikeSong,
+      shortcutGlobal: getShortcutActivationScope({ activationScopes }, "global", "toggleOverlay") === "global",
+      likeShortcutGlobal: getShortcutActivationScope({ activationScopes }, "global", "quickLikeSong") === "global",
     });
   }
 }
@@ -35,6 +44,15 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
   persist(
     (set, get) => ({
       ...DEFAULT_SHORTCUTS,
+      activationScopes: {},
+      nativeRegistration: { registered: [], failed: {} },
+      setNativeRegistration: (nativeRegistration) => set({ nativeRegistration }),
+      setActivationScope: (scope, action, value) => {
+        if (!(action in DEFAULT_SHORTCUTS[scope]) || (value !== "app" && value !== "global")) return;
+        const activationScopes = { ...get().activationScopes, [`${scope}-${action}`]: value };
+        set({ activationScopes });
+        notifyElectronGlobalShortcuts(get().global, activationScopes);
+      },
       isRecording: false,
 
       setIsRecording: (recording: boolean) => {
@@ -52,7 +70,7 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
           [action]: normalized,
         };
         set({ global: nextGlobal });
-        notifyElectronGlobalShortcuts(nextGlobal);
+        notifyElectronGlobalShortcuts(nextGlobal, get().activationScopes);
 
         // Keep legacy overlay store in sync for toggleOverlay
         if (action === "toggleOverlay") {
@@ -83,6 +101,8 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
       },
 
       resetShortcut: (scope, action) => {
+        const { [`${scope}-${action}`]: _removed, ...activationScopes } = get().activationScopes;
+        set({ activationScopes });
         if (scope === "global" && action in DEFAULT_SHORTCUTS.global) {
           const act = action as keyof GlobalShortcutsSettings;
           get().setGlobalShortcut(act, DEFAULT_SHORTCUTS.global[act]);
@@ -96,10 +116,11 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
       },
 
       resetSection: (scope) => {
+        set({ activationScopes: Object.fromEntries(Object.entries(get().activationScopes).filter(([id]) => !id.startsWith(`${scope}-`))) });
         if (scope === "global") {
           const next = { ...DEFAULT_SHORTCUTS.global };
           set({ global: next });
-          notifyElectronGlobalShortcuts(next);
+          notifyElectronGlobalShortcuts(next, get().activationScopes);
           useOverlaySettingsStore.setState({ shortcut: next.toggleOverlay });
         } else if (scope === "mainApp") {
           set({ mainApp: { ...DEFAULT_SHORTCUTS.mainApp } });
@@ -110,6 +131,8 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
 
       resetAll: () => {
         set({
+          activationScopes: {},
+          nativeRegistration: { registered: [], failed: {} },
           global: { ...DEFAULT_SHORTCUTS.global },
           mainApp: { ...DEFAULT_SHORTCUTS.mainApp },
           miniplayer: { ...DEFAULT_SHORTCUTS.miniplayer },
@@ -122,12 +145,15 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
       name: "wavo_shortcuts_settings_v1",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
+        activationScopes: state.activationScopes,
         global: state.global,
         mainApp: state.mainApp,
         miniplayer: state.miniplayer,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        const validIds = new Set(Object.entries(DEFAULT_SHORTCUTS).flatMap(([scope, actions]) => Object.keys(actions).map((action) => `${scope}-${action}`)));
+        state.activationScopes = Object.fromEntries(Object.entries(state.activationScopes ?? {}).filter(([id, value]) => validIds.has(id) && (value === "app" || value === "global")));
 
         // Ensure newly added actions have defaults
         state.global = {
@@ -157,7 +183,7 @@ export const useShortcutsStore = create<ShortcutsStoreState>()(
             normalizeShortcutToEnglish(state.miniplayer[key]) || DEFAULT_SHORTCUTS.miniplayer[key];
         }
 
-        notifyElectronGlobalShortcuts(state.global);
+        notifyElectronGlobalShortcuts(state.global, state.activationScopes);
       },
     }
   )

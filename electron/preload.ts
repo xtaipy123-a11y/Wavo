@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { MainNetResult } from "./netdiag";
+import type { DiscordPlayback } from "../src/features/discord/contracts";
+import type { ShortcutsSettings, ShortcutRegistrationResult } from "../src/features/shortcuts/types";
 
 export interface DeeplinkTarget {
   type: "artist" | "album" | "playlist" | "track" | "release";
@@ -38,6 +40,7 @@ export interface WindowState {
 }
 
 export interface WavoElectronApi {
+  discordUpdatePlayback?: (playback: DiscordPlayback | null) => void;
   platform: string;
   isHyprland: boolean;
   minimize: () => Promise<void>;
@@ -126,6 +129,12 @@ export interface WavoElectronApi {
   getOverlayInitialState: () => Promise<any>;
   updateOverlaySettings: (settings: any) => void;
   pauseOverlayShortcuts: (paused: boolean) => void;
+  configureShortcuts?: (settings: ShortcutsSettings) => Promise<ShortcutRegistrationResult>;
+  clearShortcuts?: () => void;
+  getShortcutSettings?: () => Promise<{ settings: ShortcutsSettings | null; registration: ShortcutRegistrationResult }>;
+  onNativeShortcut?: (cb: (id: string) => void) => () => void;
+  onShortcutRegistration?: (cb: (result: ShortcutRegistrationResult) => void) => () => void;
+  onShortcutSettingsChanged?: (cb: (settings: ShortcutsSettings) => void) => () => void;
   onOverlaySettingsChanged: (cb: (settings: any) => void) => () => void;
   onOverlayVisibility: (cb: (visible: boolean) => void) => () => void;
   setOverlayAuthenticated?: (authenticated: boolean) => void;
@@ -138,6 +147,7 @@ const isHyprland = Boolean(
 );
 
 const api: WavoElectronApi = {
+  discordUpdatePlayback: (playback) => ipcRenderer.send("discord:update-playback", playback),
   platform: process.platform,
   isHyprland,
   minimize: () => ipcRenderer.invoke("window:minimize"),
@@ -314,6 +324,24 @@ const api: WavoElectronApi = {
   },
   pauseOverlayShortcuts: (paused) => {
     ipcRenderer.send("overlay:pause-shortcuts", paused);
+  },
+  configureShortcuts: (settings) => ipcRenderer.invoke("shortcuts:configure", settings),
+  clearShortcuts: () => ipcRenderer.send("shortcuts:clear"),
+  getShortcutSettings: () => ipcRenderer.invoke("shortcuts:get-settings"),
+  onNativeShortcut: (cb) => {
+    const listener = (_event: unknown, id: string) => cb(id);
+    ipcRenderer.on("shortcuts:trigger", listener);
+    return () => { ipcRenderer.removeListener("shortcuts:trigger", listener); };
+  },
+  onShortcutRegistration: (cb) => {
+    const listener = (_event: unknown, result: ShortcutRegistrationResult) => cb(result);
+    ipcRenderer.on("shortcuts:registration", listener);
+    return () => { ipcRenderer.removeListener("shortcuts:registration", listener); };
+  },
+  onShortcutSettingsChanged: (cb) => {
+    const listener = (_event: unknown, settings: ShortcutsSettings) => cb(settings);
+    ipcRenderer.on("shortcuts:settings-changed", listener);
+    return () => { ipcRenderer.removeListener("shortcuts:settings-changed", listener); };
   },
   onOverlaySettingsChanged: (cb) => {
     const listener = (_event: unknown, settings: any) => cb(settings);

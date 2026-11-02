@@ -1,4 +1,14 @@
 {
+  "downloads": {
+    "save_offline": "Guardar sin conexión",
+    "downloading": "Descargando …",
+    "saved": "Guardado sin conexión",
+    "failed": "Error de descarga",
+    "failed_count": "No se pudieron descargar {count} canciones. Inténtalo de nuevo para descargar las que faltan.",
+    "auto_failed": "Descarga automática incompleta",
+    "auto_retry": "Hay {count} canciones pendientes. Wavo lo intentará al recuperar la conexión o reiniciar la aplicación.",
+    "empty_hint": "Pulsa el icono de descarga junto a una canción o «Guardar sin conexión» en una playlist."
+  },
   "artist": {
     "no_biography": "Sin biografía",
     "followers": "seguidores",
@@ -45,7 +55,7 @@
     "app": {
       "name": "Wavo",
       "description": "Más de lo que te gusta",
-      "version": "Versión 0.1.0"
+      "version": "Versión 0.1.55"
     },
     "sidebar": {
       "home": "Inicio",
@@ -155,11 +165,13 @@
     "playlist_created": "Lista de reproducción creada",
     "failed_create_playlist": "Error al crear la lista de reproducción",
     "imported_playlist": "Lista de reproducción importada",
-    "liked_songs": "Me gusta",
+    "liked_songs": "Favoritos",
     "start_radio": "Iniciar radio",
     "play_next": "Reproducir a continuación",
-    "like": "Me gusta",
-    "unlike": "Ya no me gusta",
+    "like": "Añadir a favoritos",
+    "add_to_favorites": "Añadir a favoritos",
+    "remove_from_favorites": "Quitar de favoritos",
+    "unlike": "Quitar de favoritos",
     "add_to_playlist": "Añadir a lista de reproducción",
     "remove_from_playlist": "Quitar de lista de reproducción",
     "no_items": "Aún no hay elementos",
@@ -213,7 +225,7 @@
   },
   "library": {
     "title": "Biblioteca",
-    "liked_songs": "Canciones que te gustan",
+    "liked_songs": "Favoritos",
     "song": "canción",
     "songs": "canciones",
     "track": "canción",
@@ -353,6 +365,8 @@
     "choose_track": "Elige una canción en la búsqueda",
     "queue": "Cola",
     "lyrics": "Letra",
+    "show_lyrics": "Mostrar letra",
+    "hide_lyrics": "Ocultar letra",
     "lyrics_upgraded": "¡Letra mejorada!",
     "playing_from": "Reproduciendo desde",
     "autoplay_radio": "Radio automática",
@@ -383,6 +397,7 @@
     "close_fullscreen": "Cerrar pantalla completa",
     "resize_left_panel": "Cambiar el tamaño del panel izquierdo. Doble clic para restablecer.",
     "artwork_size": "Tamaño de portada",
+    "options": "Ajustes del reproductor",
     "word_timing_available": "Tiempo por palabra",
     "line_timing_only": "Solo tiempo por línea",
     "word_timing_edit": "Marcar palabras",
@@ -424,7 +439,7 @@
   },
   "playlist": {
     "playlist": "Lista de reproducción",
-    "liked_songs": "Canciones que te gustan",
+    "liked_songs": "Favoritos",
     "untitled_playlist": "Lista sin título",
     "play_all": "Reproducir todo",
     "add_to_queue": "Añadir lista a la cola",
@@ -451,6 +466,17 @@
     "type_to_search": "Escribe para buscar"
   },
   "settings": {
+    "discord_presence": {
+      "title": "Discord Rich Presence",
+      "description": "Muestra la canción, el artista y el progreso en Discord con un enlace para descargar Wavo. Requiere la aplicación de escritorio de Discord y compartir actividad."
+    },
+    "offline_downloads": {
+      "title": "Descargas sin conexión",
+      "favorites": "Descargar favoritos automáticamente",
+      "favorites_description": "Guardar las nuevas canciones favoritas en este dispositivo para escucharlas sin conexión.",
+      "playlists": "Descargar canciones de playlists automáticamente",
+      "playlists_description": "Guardar las canciones que añadas a tus playlists en este dispositivo, incluidas las importaciones."
+    },
     "title": "Ajustes",
     "search_placeholder": "Buscar ajustes...",
     "subtitle": "Administra tus preferencias",
@@ -854,6 +880,11 @@
       "tab_overlay": "Superposición",
       "tab_global": "Globales",
       "scope_global": "Globales",
+      "activation_scope": "Ámbito del atajo",
+      "activation_scope_hint": "Los atajos globales funcionan cuando otra aplicación está activa.",
+      "only_app": "Solo en Wavo",
+      "only_overlay": "Solo en superposición",
+      "global_unavailable": "Este atajo no está disponible globalmente. Elige otra combinación.",
       "scope_main_app": "App principal",
       "scope_overlay": "Superposición",
       "reset_section": "Restablecer sección"

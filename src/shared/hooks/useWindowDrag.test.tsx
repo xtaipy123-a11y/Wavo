@@ -34,7 +34,10 @@ describe("useWindowDrag", () => {
     mockToggleMaximize = vi.fn();
 
     (window as any).wavoElectron = {
+      platform: "darwin",
+      dragStart: vi.fn(),
       dragMove: mockDragMove,
+      dragEnd: vi.fn(),
       toggleMaximize: mockToggleMaximize,
     };
   });
@@ -294,12 +297,12 @@ describe("useWindowDrag", () => {
     expect(mockToggleMaximize).not.toHaveBeenCalled();
   });
 
-  describe("on linux", () => {
+  describe.each(["linux", "win32"])("native dragging on %s", (platform) => {
     beforeEach(() => {
-      (window as any).wavoElectron.platform = "linux";
+      (window as any).wavoElectron.platform = platform;
     });
 
-    it("hands the drag to the compositor instead of moving the window manually", async () => {
+    it("hands dragging and double click maximize to the OS without manual drag IPC", async () => {
       await act(async () => {
         root.render(<DragTestComponent topAreaHeight={32} dragThreshold={5} />);
       });
@@ -329,11 +332,14 @@ describe("useWindowDrag", () => {
           pointerType: "mouse",
         }),
       );
+      window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
       emptyArea.dispatchEvent(
         new MouseEvent("dblclick", { button: 0, clientX: 50, clientY: 10, bubbles: true }),
       );
 
       expect(mockDragMove).not.toHaveBeenCalled();
+      expect(window.wavoElectron!.dragStart).not.toHaveBeenCalled();
+      expect(window.wavoElectron!.dragEnd).not.toHaveBeenCalled();
       expect(mockToggleMaximize).not.toHaveBeenCalled();
     });
 

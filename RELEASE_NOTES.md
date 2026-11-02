@@ -1,4 +1,29 @@
-# Neu in Wavo 0.1.54
+# Neu in Wavo 0.1.55
+
+## Added
+
+- **Discord Rich Presence:** Die Desktop-App zeigt den aktuellen Song, Künstler und Wiedergabefortschritt auf Discord, inklusive Link zum Wavo-Download. Die Verbindung wird automatisch wiederhergestellt, wenn Discord später startet. Unter **Einstellungen → Wiedergabe** lässt sich die Anzeige abschalten; beim Pausieren, Laden oder Beenden wird die Aktivität entfernt. Benötigt die Discord-Desktop-App mit aktivierter Aktivitätsfreigabe.
+- **Automatische Offline-Downloads:** Neu favorisierte Songs und neu zu eigenen Playlists hinzugefügte Titel werden auf diesem Gerät automatisch gespeichert, auch bei Playlist-Importen. Beide Optionen sind standardmäßig aktiv und unter **Einstellungen → Audio → Offline-Downloads** einzeln abschaltbar. Ausstehende automatische Downloads bleiben für den nächsten Start oder eine erneute Internetverbindung vorgemerkt.
+- **Direkt offline speichern:** Download-Schaltflächen neben Songs und bei beliebten Titeln auf der Startseite sowie **Offline speichern** für die geladenen Songs einer Playlist oder eines Albums. Bereits gespeicherte Titel werden übersprungen; bei Sammeldownloads werden Fortschritt und fehlgeschlagene Downloads angezeigt.
+- **Globale Tastenkürzel:** Für jedes Kürzel lässt sich wählen, ob es nur im jeweiligen Wavo-Fenster oder auch bei aktiven anderen Programmen gilt. Nicht verfügbare globale Kombinationen werden in den Einstellungen markiert.
+- **Liedtexte im Vollbild ein- und ausblenden:** Eine neue Schaltfläche blendet den Liedtextbereich mit einem animierten Übergang aus und gibt dem Player die volle Breite. Wavo merkt sich die Auswahl und berücksichtigt reduzierte Bewegung.
+
+## Changes
+
+- **Vollbildplayer aufgeräumt:** Covergröße, Wiedergabegeschwindigkeit und Tonhöhe sind im neuen Menü **Player-Einstellungen** gebündelt. Favoriten lassen sich über das Herz direkt neben dem Songtitel umschalten; Downloads sind über Songlisten und Playlists erreichbar.
+- **Wiederholung deutlicher erkennbar:** Mini- und Vollbildplayer zeigen aktive Wiederholung mit hervorgehobenem Symbol und Statuspunkt. Beschriftungen unterscheiden zwischen ausgeschalteter Wiederholung, Playlist- und Song-Wiederholung.
+- **Freunde-Bereich überarbeitet:** Neues Layout für Unterhaltungen, Hörsessions und gemeinsame Playlists, mit klareren Leerzuständen, einem sichtbaren Schalter zum Teilen der Höraktivität und einer Playlist-Auswahl mit Hinweis, wenn noch keine eigenen Playlists vorhanden sind.
+- **Englisch als Startsprache:** Neue Installationen starten unabhängig von der Systemsprache auf Englisch. Eine ausdrücklich gespeicherte Sprachauswahl bleibt erhalten.
+- **Entwicklung ohne Anmeldepflicht:** Der Entwicklungsserver öffnet Wavo standardmäßig ohne Anmeldung; mit `VITE_DEV_SKIP_LOGIN=false` lässt sich der reguläre Anmeldeablauf testen. Entwicklungsfavoriten werden getrennt von echten Konten gespeichert. Veröffentlichte Builds verlangen weiterhin eine Anmeldung.
+
+## Fixes
+
+- **Windows-Fensterverhalten korrigiert:** Verschieben nutzt die native Fenstersteuerung und vermeidet Größenabweichungen bei nicht ganzzahliger Bildschirmskalierung. Maximieren und Wiederherstellen nutzen wieder das native Windows-Verhalten; Fensterecken passen sich dem maximierten Zustand an.
+- **Downloads robuster:** Gleichzeitige Anfragen für denselben Song teilen sich einen Download; höchstens zwei Downloads laufen parallel. Veraltete Ladevorgänge überschreiben die aktuelle Downloadliste nicht mehr. Auch wartende Downloads können über das Songmenü abgebrochen werden.
+- **Tastenkürzel besser abgestimmt:** Global registrierte Kürzel werden im Fenster nicht zusätzlich ausgelöst. Während der Aufnahme einer neuen Kombination pausieren die Kürzel; Hauptfenster und Overlay gleichen ihre Einstellungen ab.
+- **Bedienung und Rückmeldungen korrigiert:** Die Freundesuche verwirft alte Ergebnisse beim Ändern des Suchbegriffs und zeigt Lade- sowie Leerzustände. Tastatureingaben an Schaltflächen innerhalb einer Songzeile starten nicht zusätzlich die Wiedergabe. Favoriten-Schaltflächen haben eindeutige Beschriftungen und einen auslesbaren Aktivstatus.
+
+## Seit 0.1.54
 
 - Eigene Playlists zeigen jetzt passende Songvorschläge aus der vorhandenen Musikquelle. Ein Klick auf **+** fügt den Song direkt hinzu; bereits enthaltene Songs und doppelte Vorschläge werden ausgeblendet.
 - Mit **Neue Vorschläge** lassen sich weitere Titel entdecken.

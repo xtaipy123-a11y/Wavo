@@ -2,6 +2,7 @@ export const DEFAULT_LEFT_PANE_PERCENT = 50;
 export const FULLSCREEN_PANE_STORAGE_KEY = "wavo_fullscreen_left_pane_percent_v1";
 export const DEFAULT_ARTWORK_SIZE = 380;
 export const FULLSCREEN_ARTWORK_STORAGE_KEY = "wavo_fullscreen_artwork_size_v1";
+export const FULLSCREEN_LYRICS_STORAGE_KEY = "wavo_fullscreen_lyrics_visible_v1";
 
 export function getLeftPaneLimits(containerWidth: number) {
   if (!Number.isFinite(containerWidth) || containerWidth <= 0) {

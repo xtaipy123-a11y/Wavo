@@ -8,8 +8,8 @@ import {
   RepeatOne,
   Shuffle,
 } from "@solar-icons/react";
-import { AddLine, CheckFill } from "@mingcute/react";
-import { LuCheck, LuDownload, LuX } from "react-icons/lu";
+import { HeartFill, HeartLine } from "@mingcute/react";
+import { LuMessageSquareQuote } from "react-icons/lu";
 import {
   PlayerMorphIcon,
   ICON_PLAY,
@@ -23,10 +23,9 @@ import { ArtistLink } from "@/features/artist";
 import { useCoverReady, CoverImage } from "@/features/covers";
 import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import Tooltip from "@/shared/ui/Tooltip";
-import { showToast } from "@/shared/ui";
-import { useDownloadStore } from "@/features/downloads/downloadStore";
 import { VolumePicker } from "./VolumePicker";
 import { TimelineSlider } from "./TimelineSlider";
+import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
 
 import { useTranslation } from "@/languages";
 
@@ -67,6 +66,8 @@ interface PlayerUiElementsProps {
   artworkSize?: number;
   preferredArtworkSize?: number;
   onArtworkSizeChange?: (size: number) => void;
+  lyricsVisible?: boolean;
+  onToggleLyrics?: () => void;
 }
 
 export function PlayerUiElements({
@@ -75,6 +76,8 @@ export function PlayerUiElements({
   artworkSize = 280,
   preferredArtworkSize,
   onArtworkSizeChange,
+  lyricsVisible = true,
+  onToggleLyrics,
 }: PlayerUiElementsProps) {
   const player = usePlayerState();
 
@@ -84,12 +87,6 @@ export function PlayerUiElements({
   const trackArtists = track?.artists || "";
 
   const isLiked = useIsTrackLiked(track?.id);
-  const isDownloaded = useDownloadStore((state) =>
-    Boolean(track && state.tracks.some((download) => download.id === track.id)),
-  );
-  const downloadStatus = useDownloadStore((state) =>
-    track ? state.statusById[track.id] : undefined,
-  );
   const likeMutation = useLikeTrack();
   const unlikeMutation = useUnlikeTrack();
   const togglingRef = useRef(false);
@@ -110,27 +107,7 @@ export function PlayerUiElements({
   const isCoverLoaded = useCoverReady(coverUrl);
 
   const { t, locale } = useTranslation();
-
-  const handleDownload = useCallback(async () => {
-    if (!track || isDownloaded) return;
-    const downloads = useDownloadStore.getState();
-    if (downloadStatus === "downloading") {
-      downloads.cancel(track.id);
-      return;
-    }
-    if (downloadStatus) return;
-    try {
-      await downloads.download(track);
-      showToast(locale === "de" ? "Offline gespeichert" : "Saved for offline", "checkmark", {
-        description: track.title,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      showToast(locale === "de" ? "Download fehlgeschlagen" : "Download failed", "error", {
-        description: error instanceof Error ? error.message : undefined,
-      });
-    }
-  }, [track, isDownloaded, downloadStatus, locale]);
+  const favoriteLabel = t(isLiked ? "common.remove_from_favorites" : "common.add_to_favorites");
 
   return (
     <>
@@ -168,60 +145,32 @@ export function PlayerUiElements({
             )}
           </motion.div>
         </AnimatePresence>
-        {/* tooltip wrapper positioned on cover corner */}
-        <Tooltip
-          content={isLiked ? t("common.unlike") : t("common.like")}
-          side="top"
-          wrapperClassName="!absolute bottom-2.5 left-2.5 z-20"
-        >
-          <button
-            type="button"
-            aria-label={isLiked ? t("common.unlike") : t("common.like")}
-            className={`relative inline-flex h-[30px] w-[30px] items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.92] bg-black/40 backdrop-blur-md border-none ${
-              isLiked
-                ? "text-white hover:bg-black/60"
-                : "text-white/70 hover:text-white hover:bg-black/60"
-            }`}
-            onClick={handleLikeToggle}
-            style={{ cursor: "pointer" }}
-          >
-            <motion.div
-              initial={false}
-              animate={{
-                scale: isLiked ? 1 : 0.5,
-                opacity: isLiked ? 1 : 0,
-                rotate: isLiked ? 0 : -45,
-              }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-0 flex items-center justify-center"
-            >
-              <CheckFill size={16} />
-            </motion.div>
-            <motion.div
-              initial={false}
-              animate={{
-                scale: !isLiked ? 1 : 0.5,
-                opacity: !isLiked ? 1 : 0,
-                rotate: !isLiked ? 0 : 45,
-              }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-0 flex items-center justify-center"
-            >
-              <AddLine size={16} />
-            </motion.div>
-          </button>
-        </Tooltip>
       </div>
 
       {/* Track info */}
       <div className="flex items-start justify-center min-w-0" style={{ width: artworkSize, maxWidth: "100%" }}>
-        <div className="flex flex-col gap-[2px] min-w-0 text-center">
-          <p
-            className="m-0 font-[600] text-white flex items-center justify-center gap-[6px] max-w-full"
+        <div className="flex w-full flex-col gap-[2px] min-w-0 text-center">
+          <div
+            className="relative m-0 flex min-h-[28px] min-w-0 max-w-[calc(100%-68px)] self-center items-center justify-center font-[600] text-white"
             style={{ letterSpacing: "-0.03em", fontSize: artworkSize >= 420 ? 18 : 16 }}
           >
             <span className="min-w-0 truncate">{trackTitle}</span>
-          </p>
+            <Tooltip content={favoriteLabel} side="top" wrapperClassName="!absolute left-full top-1/2 ml-[6px] -translate-y-1/2">
+              <button
+                type="button"
+                aria-label={favoriteLabel}
+                aria-pressed={isLiked}
+                disabled={!track}
+                data-no-window-drag
+                className={`inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full border-none bg-transparent cursor-pointer transition-all duration-150 hover:bg-white/10 active:scale-[0.92] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-40 ${
+                  isLiked ? "text-white" : "text-white/60 hover:text-white"
+                }`}
+                onClick={handleLikeToggle}
+              >
+                {isLiked ? <HeartFill size={20} aria-hidden="true" /> : <HeartLine size={20} aria-hidden="true" />}
+              </button>
+            </Tooltip>
+          </div>
           <p className="m-0 flex items-center justify-center gap-[5px] text-[13px] text-white/60 leading-snug max-w-full overflow-hidden">
             {track?.explicit && (
               <ExplicitBadge className="!bg-white/60 !text-black !pb-0 !leading-none shrink-0" />
@@ -241,28 +190,6 @@ export function PlayerUiElements({
         </div>
       </div>
 
-      {track && (
-        <button
-          type="button"
-          onClick={() => void handleDownload()}
-          disabled={isDownloaded || downloadStatus === "removing"}
-          aria-label={downloadStatus === "downloading"
-            ? (locale === "de" ? "Download abbrechen" : "Cancel download")
-            : isDownloaded
-              ? (locale === "de" ? "Offline gespeichert" : "Saved for offline")
-              : (locale === "de" ? "Offline speichern" : "Download for offline")}
-          className="inline-flex min-h-[32px] items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-[12px] font-medium text-white/85 backdrop-blur-md transition-colors hover:border-white/30 hover:bg-black/50 disabled:cursor-default disabled:opacity-60"
-          data-no-window-drag
-        >
-          {downloadStatus === "downloading" ? <LuX size={14} /> : isDownloaded ? <LuCheck size={14} /> : <LuDownload size={14} />}
-          <span>{downloadStatus === "downloading"
-            ? (locale === "de" ? "Download abbrechen" : "Cancel download")
-            : isDownloaded
-              ? (locale === "de" ? "Offline gespeichert" : "Saved for offline")
-              : (locale === "de" ? "Offline speichern" : "Download for offline")}</span>
-        </button>
-      )}
-
       {/* Timeline (Compact, with smooth spring pill, no thumb) */}
       <TimelineSlider
         positionMs={player.positionMs}
@@ -275,7 +202,13 @@ export function PlayerUiElements({
       />
 
       {/* Primary Playback Controls */}
-      <div className="flex items-center gap-[14px]">
+      <div className="relative flex items-center gap-[14px]">
+        <PlayerOptionsMenu
+          className={`${iconButtonClass} absolute right-full mr-[14px] rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
+          artworkSize={artworkSize}
+          preferredArtworkSize={preferredArtworkSize}
+          onArtworkSizeChange={onArtworkSizeChange}
+        />
         <button
           type="button"
           aria-label="Shuffle"
@@ -318,6 +251,8 @@ export function PlayerUiElements({
         <button
           type="button"
           aria-label="Repeat"
+          aria-pressed={player.repeat !== "off"}
+          title={player.repeat === "off" ? (locale === "de" ? "Wiederholung aus" : "Repeat off") : player.repeat === "all" ? (locale === "de" ? "Playlist wiederholen" : "Repeat playlist") : (locale === "de" ? "Song wiederholen" : "Repeat song")}
           onClick={() =>
             playerEngine.setRepeat(
               player.repeat === "off"
@@ -327,39 +262,39 @@ export function PlayerUiElements({
                   : "off",
             )
           }
-          className={`${iconButtonClass} ${
+          className={`${iconButtonClass} relative ${
             player.repeat !== "off" ? "!text-white !opacity-100" : "!text-white/40"
           }`}
         >
           {player.repeat === "one" ? (
-            <RepeatOne size={18} />
+            <RepeatOne size={18} weight="Bold" />
           ) : (
-            <Repeat size={18} />
+            <Repeat size={18} weight={player.repeat === "all" ? "Bold" : "Outline"} />
+          )}
+          {player.repeat !== "off" && (
+            <span aria-hidden="true" className="absolute bottom-[2px] h-[3px] w-[3px] rounded-full bg-current" />
           )}
         </button>
+        {onToggleLyrics && (
+          <button
+            type="button"
+            aria-label={t("player.lyrics")}
+            aria-pressed={lyricsVisible}
+            aria-controls="fullscreen-player-lyrics"
+            title={t(lyricsVisible ? "player.hide_lyrics" : "player.show_lyrics")}
+            onClick={onToggleLyrics}
+            data-no-window-drag
+            className={`${iconButtonClass} absolute left-full ml-[14px] rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+              lyricsVisible ? "!bg-white/15 !text-white !opacity-100" : "!text-white/40"
+            }`}
+          >
+            <LuMessageSquareQuote size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* Volume (Compact smooth slider, size sm) */}
       <VolumePicker className="w-[180px]" size="sm" />
-      {onArtworkSizeChange && (
-        <div className="flex w-full max-w-[230px] items-center gap-3 rounded-lg bg-black/30 px-3 py-2 text-white/70 backdrop-blur-md">
-          <label htmlFor="wavo-artwork-size" className="shrink-0 text-[11px] font-medium">
-            {t("player.artwork_size")}
-          </label>
-          <input
-            id="wavo-artwork-size"
-            type="range"
-            min={180}
-            max={640}
-            step={10}
-            value={preferredArtworkSize ?? artworkSize}
-            onChange={(event) => onArtworkSizeChange(Number(event.target.value))}
-            aria-label={t("player.artwork_size")}
-            className="min-w-0 flex-1 accent-white"
-            data-no-window-drag
-          />
-        </div>
-      )}
     </>
   );
 }

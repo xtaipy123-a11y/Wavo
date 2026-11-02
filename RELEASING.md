@@ -10,7 +10,7 @@ Die App liest die öffentliche GitHub-Releasequelle über `electron-updater`. Ei
 
 ## Nächste Version veröffentlichen
 
-Vor jedem Release `package.json`, `src/shared/config/version.ts` und `RELEASE_NOTES.md` aktualisieren. Danach die Änderungen committen und `main` pushen; den Tag `v<version>` auf denselben Commit setzen und pushen. Der Workflow veröffentlicht den Installer, die `.exe.blockmap`, `latest.yml` und die Versionsnotizen. Unter **Actions** den erfolgreichen Lauf und unter **Releases** alle Dateien prüfen. Ein lokaler Build mit `corepack pnpm run release:win` veröffentlicht nichts auf GitHub.
+Vor jedem Release die Version in `package.json`, `versionName` und `versionCode` in `android/app/build.gradle` sowie die Versionsbeschriftungen `common.app.version` in `src/languages/locales/*.json` aktualisieren. `src/shared/config/version.ts` und Vite übernehmen die App-Version aus `package.json`. In `RELEASE_NOTES.md` die neue Version mit den Abschnitten **Added**, **Changes** und **Fixes** vor die bisherigen Einträge setzen. Danach die Änderungen committen und `main` pushen; den Tag `v<version>` auf denselben Commit setzen und pushen. Der Workflow startet beim Push des Tags und veröffentlicht den Installer, die `.exe.blockmap`, `latest.yml` und die Versionsnotizen. Für diesen Release lautet der Tag `v0.1.55`. Unter **Actions** den erfolgreichen Lauf und unter **Releases** alle Dateien prüfen. Ein lokaler Build mit `corepack pnpm run release:win` veröffentlicht nichts auf GitHub.
 
 ## Freunde und Nachrichten
 

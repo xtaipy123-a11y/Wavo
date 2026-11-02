@@ -1,4 +1,14 @@
 {
+  "downloads": {
+    "save_offline": "Download for offline",
+    "downloading": "Downloading …",
+    "saved": "Saved for offline",
+    "failed": "Download failed",
+    "failed_count": "{count} songs could not be downloaded. Try again to download the missing songs.",
+    "auto_failed": "Automatic download incomplete",
+    "auto_retry": "{count} songs are pending. Wavo will retry when the connection returns or the app restarts.",
+    "empty_hint": "Click the download icon beside a song or “Download for offline” in a playlist."
+  },
   "artist": {
     "no_biography": "No biography",
     "followers": "followers",
@@ -45,7 +55,7 @@
     "app": {
       "name": "Wavo",
       "description": "More of what you like",
-      "version": "Version 0.1.0"
+      "version": "Version 0.1.55"
     },
     "sidebar": {
       "home": "Home",
@@ -156,11 +166,13 @@
     "playlist_created": "Playlist created",
     "failed_create_playlist": "Failed to create playlist",
     "imported_playlist": "Imported Playlist",
-    "liked_songs": "Likes",
+    "liked_songs": "Favorites",
     "start_radio": "Start station",
     "play_next": "Play next",
-    "like": "Like",
-    "unlike": "Unlike",
+    "like": "Add to favorites",
+    "add_to_favorites": "Add to favorites",
+    "remove_from_favorites": "Remove from favorites",
+    "unlike": "Remove from favorites",
     "add_to_playlist": "Add to playlist",
     "remove_from_playlist": "Remove from playlist",
     "no_items": "No items yet",
@@ -210,7 +222,7 @@
   },
   "library": {
     "title": "Library",
-    "liked_songs": "Liked Songs",
+    "liked_songs": "Favorites",
     "song": "song",
     "songs": "songs",
     "track": "track",
@@ -350,6 +362,8 @@
     "choose_track": "Choose a track in search",
     "queue": "Queue",
     "lyrics": "Lyrics",
+    "show_lyrics": "Show lyrics",
+    "hide_lyrics": "Hide lyrics",
     "lyrics_upgraded": "Lyrics upgraded!",
     "playing_from": "Playing from",
     "autoplay_radio": "Autoplay Radio",
@@ -380,6 +394,7 @@
     "close_fullscreen": "Close fullscreen",
     "resize_left_panel": "Resize the left player pane. Double-click to reset.",
     "artwork_size": "Cover size",
+    "options": "Player settings",
     "word_timing_available": "Word timing",
     "line_timing_only": "Line timing only",
     "word_timing_edit": "Time words",
@@ -421,7 +436,7 @@
   },
   "playlist": {
     "playlist": "Playlist",
-    "liked_songs": "Liked songs",
+    "liked_songs": "Favorites",
     "untitled_playlist": "Untitled Playlist",
     "play_all": "Play all",
     "add_to_queue": "Add playlist to a queue",
@@ -448,6 +463,17 @@
     "type_to_search": "Type to search"
   },
   "settings": {
+    "discord_presence": {
+      "title": "Discord Rich Presence",
+      "description": "Show your song, artist and playback progress on Discord with a Wavo download link. Requires the Discord desktop app and activity sharing."
+    },
+    "offline_downloads": {
+      "title": "Offline downloads",
+      "favorites": "Download favorites automatically",
+      "favorites_description": "Save newly favorited songs on this device for offline listening.",
+      "playlists": "Download playlist songs automatically",
+      "playlists_description": "Save songs added to your playlists on this device, including imports."
+    },
     "title": "Settings",
     "search_placeholder": "Search settings...",
     "subtitle": "Manage your preferences",
@@ -533,6 +559,11 @@
       "tab_overlay": "Overlay",
       "tab_global": "Global",
       "scope_global": "Global",
+      "activation_scope": "Shortcut scope",
+      "activation_scope_hint": "Global shortcuts also work while another app is focused.",
+      "only_app": "Only in Wavo",
+      "only_overlay": "Only in overlay",
+      "global_unavailable": "This shortcut is not available globally. Choose another combination.",
       "scope_main_app": "Main App",
       "scope_overlay": "Overlay",
       "reset_section": "Reset section"

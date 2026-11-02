@@ -18,6 +18,8 @@ export interface SelectProps<T extends string = string> {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  menuClassName?: string;
+  emptyState?: React.ReactNode;
   "aria-label"?: string;
   variant?: "default" | "transparent";
 }
@@ -118,6 +120,8 @@ export function Select<T extends string = string>({
   placeholder = "Select\u2026",
   disabled = false,
   className = "",
+  menuClassName = "",
+  emptyState,
   "aria-label": ariaLabel,
   variant = "default",
 }: SelectProps<T>) {
@@ -228,10 +232,12 @@ export function Select<T extends string = string>({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: -4 }}
               transition={{ duration: 0.13, ease: "easeOut" }}
-              className="fixed z-[9999] overflow-hidden rounded-md border border-border-primary bg-bg-primary p-[6px]"
+              aria-label={ariaLabel}
+              className={`fixed z-[9999] overflow-hidden rounded-md border border-border-primary bg-bg-primary p-[6px] ${menuClassName}`}
               style={menuStyle}
             >
               <div className="flex flex-col gap-[2px]">
+                {!options.length && emptyState}
                 {options.map((option) => {
                   const isActive = option.value === value;
                   return (

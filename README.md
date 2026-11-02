@@ -9,9 +9,19 @@ corepack pnpm install
 corepack pnpm dev
 ```
 
+The dev server opens the app without requiring sign-in. Existing sessions are still restored; account and cloud features require a real session. Set `VITE_DEV_SKIP_LOGIN=false` in `.env.local` and restart the dev server to test the normal sign-in flow. Production builds always require sign-in, regardless of this setting.
+
+In Settings → Shortcuts, each binding can apply only inside its Wavo window or globally on the desktop. Global bindings require a modifier or function key. They pause while recording a replacement, and unavailable combinations are marked in Settings. Existing bindings keep their previous scope until changed.
+
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are read from `.env.local` when Vite starts. Email and password sign-in, sign-up, automatic refresh, and sign-out use Supabase Auth. If email confirmation is enabled in Supabase, new users confirm through the email link and then sign in inside Wavo.
 
 The supplied Next.js `page.tsx` and middleware examples do not run in this Electron/Vite project. `@supabase/ssr` is installed as requested but is not used by the desktop renderer.
+
+## Discord Rich Presence
+
+The desktop app shares the currently playing song, artist and live progress with the local Discord desktop client. It reconnects automatically if Discord starts later or restarts. Pausing, buffering, stopping, closing Wavo or disabling **Settings → Playback → Discord Rich Presence** removes the activity. No Discord login, bot token or client secret is needed. Enable activity sharing in Discord to make the presence visible.
+
+New installations start in English regardless of the system language. A language explicitly selected in Wavo remains saved.
 
 ## Music API
 

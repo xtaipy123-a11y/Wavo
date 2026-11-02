@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, screen, dialog, session, nativeImage, powerSaveBlocker, safeStorage } from "electron";
+import { app, BrowserWindow, ipcMain, shell, screen, dialog, session, nativeImage, powerSaveBlocker, safeStorage, globalShortcut } from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
@@ -36,6 +36,9 @@ import { TouchBarManager } from "./touchbar.js";
 import { OverlayManager } from "./overlay.js";
 import { BundleManager } from "./bundle-manager.js";
 import { createSleepBlocker } from "./sleep-blocker.js";
+import { DiscordPresence } from "./discord-presence.js";
+import { createGlobalShortcutRegistry } from "./global-shortcuts.js";
+import { DEFAULT_SHORTCUTS, getShortcutActivationScope, type ShortcutsSettings, type ShortcutRegistrationResult } from "../src/features/shortcuts/types";
 
 // root error handling for main process
 process.on("uncaughtException", (error) => {
@@ -66,9 +69,11 @@ process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let mainWindow: BrowserWindow | null = null;
+const discordPresence = new DiscordPresence();
 let touchBarManager: TouchBarManager | null = null;
 let overlayManager: OverlayManager | null = null;
 let bundleManager: BundleManager | null = null;
+let shortcutRegistry: ReturnType<typeof createGlobalShortcutRegistry> | null = null;
 const postUpdateInfoPath = () => path.join(app.getPath("userData"), "post-update.json");
 
 function releaseNotesText(value: unknown): string | undefined {
@@ -118,9 +123,10 @@ function createWindow() {
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     frame: false,
-    transparent: true,
-    backgroundColor: "#00000000",
-    hasShadow: false,
+    // Layered transparent windows bypass native maximize/restore behavior on Windows.
+    transparent: process.platform !== "win32",
+    backgroundColor: process.platform === "win32" ? "#e4e4e7" : "#00000000",
+    hasShadow: process.platform === "win32",
     fullscreenable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -168,6 +174,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    discordPresence.update(null);
     console.error(
       `\x1b[41;37m crash \x1b[0m renderer process gone (reason: ${details.reason}, exitCode: ${details.exitCode})`,
     );
@@ -219,12 +226,15 @@ function createWindow() {
     }
   }
 
+  mainWindow.webContents.on("did-start-loading", () => discordPresence.update(null));
+
   // renderer ready, deliver any cold-start deeplink waiting in the queue
   mainWindow.webContents.on("did-finish-load", () => {
     flushPendingDeeplink();
   });
 
   mainWindow.on("closed", () => {
+    discordPresence.update(null);
     mainWindow = null;
     overlayManager?.destroy();
     if (process.platform !== "darwin") {
@@ -263,6 +273,9 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    ipcMain.on("discord:update-playback", (event, playback: unknown) => {
+      if (event.sender === mainWindow?.webContents) discordPresence.update(playback);
+    });
     if (!app.isPackaged && process.env.WAVO_DEV_SIGNING_SECRET) {
       setDevSigningSecret(process.env.WAVO_DEV_SIGNING_SECRET);
       console.log("\x1b[43;30m signer \x1b[0m dev signing secret active (unpackaged build only)");
@@ -292,6 +305,64 @@ if (!gotTheLock) {
     );
     overlayManager.setMainWindow(mainWindow);
     overlayManager.registerShortcut();
+
+    let shortcutSettings: ShortcutsSettings | null = null;
+    let shortcutRegistration: ShortcutRegistrationResult = { registered: [], failed: {} };
+    const publishShortcutRegistration = (result: ShortcutRegistrationResult) => {
+      const overlayIds = overlayManager?.getRegisteredShortcutIds() ?? [];
+      const failed = { ...result.failed };
+      if (shortcutSettings) {
+        for (const action of Object.keys(DEFAULT_SHORTCUTS.global)) {
+          const id = `global-${action}`;
+          if (getShortcutActivationScope(shortcutSettings, "global", action) === "global" && !overlayIds.includes(id)) failed[id] = "unavailable";
+        }
+      }
+      shortcutRegistration = { registered: [...result.registered, ...overlayIds], failed };
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.send("shortcuts:registration", shortcutRegistration);
+      return shortcutRegistration;
+    };
+    shortcutRegistry = createGlobalShortcutRegistry(globalShortcut, (id) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (["mainApp-search", "mainApp-toggleQueue", "mainApp-toggleLyrics", "mainApp-toggleFullscreen", "miniplayer-focusMainWindow"].includes(id)) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+      if (id !== "miniplayer-focusMainWindow") mainWindow.webContents.send("shortcuts:trigger", id);
+    });
+    ipcMain.handle("shortcuts:configure", (event, input: ShortcutsSettings) => {
+      if (event.sender !== mainWindow?.webContents || !input || typeof input !== "object") throw new Error("Invalid shortcut configuration sender");
+      const next: ShortcutsSettings = { ...DEFAULT_SHORTCUTS };
+      for (const scope of ["global", "mainApp", "miniplayer"] as const) {
+        Object.assign(next, { [scope]: Object.fromEntries(Object.entries(DEFAULT_SHORTCUTS[scope]).map(([action, fallback]) => {
+          const value: unknown = Reflect.get(input[scope] ?? {}, action);
+          return [action, typeof value === "string" && value.length <= 80 ? value : fallback];
+        })) });
+      }
+      next.activationScopes = Object.fromEntries(Object.entries(input.activationScopes ?? {}).filter(([, value]) => value === "app" || value === "global"));
+      shortcutSettings = next;
+      overlayManager?.configureShortcutScopes(next.global.toggleOverlay, next.global.quickLikeSong,
+        getShortcutActivationScope(next, "global", "toggleOverlay") === "global",
+        getShortcutActivationScope(next, "global", "quickLikeSong") === "global");
+      const result = publishShortcutRegistration(shortcutRegistry!.configure(next));
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.webContents !== event.sender) win.webContents.send("shortcuts:settings-changed", next);
+      }
+      return result;
+    });
+    ipcMain.handle("shortcuts:get-settings", () => ({ settings: shortcutSettings, registration: shortcutRegistration }));
+    ipcMain.on("shortcuts:clear", (event) => {
+      if (event.sender !== mainWindow?.webContents) return;
+      shortcutSettings = null;
+      shortcutRegistry?.destroy();
+      overlayManager?.unregisterShortcut();
+      overlayManager?.unregisterLikeShortcut();
+      publishShortcutRegistration({ registered: [], failed: {} });
+    });
+    ipcMain.on("overlay:pause-shortcuts", (event, paused: boolean) => {
+      if (event.sender !== mainWindow?.webContents) return;
+      if (shortcutRegistry) publishShortcutRegistration(shortcutRegistry.pause(Boolean(paused)));
+    });
 
     const isHyprland = Boolean(
       process.env.HYPRLAND_INSTANCE_SIGNATURE ||
@@ -647,8 +718,8 @@ if (!gotTheLock) {
       }
     });
 
-    // manual window move for windows/macos, anchored on the system cursor.
-    // linux uses css app-region instead (see useWindowDrag): wayland ignores setPosition
+    // Manual window move for macOS, anchored on the system cursor.
+    // Windows/Linux use native CSS app-region dragging (see useWindowDrag).
     let dragStartCursor: { x: number; y: number } | null = null;
     let dragStartWinPos: { x: number; y: number } | null = null;
 
@@ -1150,6 +1221,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  discordPresence.destroy();
+  shortcutRegistry?.destroy();
   touchBarManager?.unregisterShortcut();
   overlayManager?.unregisterShortcut();
   overlayManager?.destroy();

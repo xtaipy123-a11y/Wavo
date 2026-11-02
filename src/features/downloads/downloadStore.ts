@@ -7,8 +7,34 @@ import type { Track } from "@/shared/types";
 
 const MAX_DOWNLOAD_BYTES = 150 * 1024 * 1024;
 const activeDownloads = new Map<string, AbortController>();
+const pendingDownloads = new Map<string, Promise<void>>();
+const waiting: Array<() => void> = [];
+let running = 0;
+let revision = 0;
 
-type DownloadStatus = "downloading" | "removing";
+async function downloadSlot(signal: AbortSignal): Promise<() => void> {
+  if (running >= 2) {
+    await new Promise<void>((resolve, reject) => {
+      const resume = () => { signal.removeEventListener("abort", abort); resolve(); };
+      const abort = () => {
+        const index = waiting.indexOf(resume);
+        if (index >= 0) waiting.splice(index, 1);
+        reject(new DOMException("Download abgebrochen", "AbortError"));
+      };
+      waiting.push(resume);
+      signal.addEventListener("abort", abort, { once: true });
+    });
+  } else {
+    running++;
+  }
+  return () => {
+    const next = waiting.shift();
+    if (next) next();
+    else running--;
+  };
+}
+
+type DownloadStatus = "queued" | "downloading" | "removing";
 
 interface DownloadState {
   tracks: Track[];
@@ -16,6 +42,7 @@ interface DownloadState {
   statusById: Record<string, DownloadStatus>;
   hydrate: () => Promise<void>;
   download: (track: Track) => Promise<void>;
+  downloadMany: (tracks: Track[]) => Promise<{ failed: number }>;
   remove: (trackId: string) => Promise<void>;
   cancel: (trackId: string) => void;
 }
@@ -56,35 +83,56 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   hydrated: false,
   statusById: {},
   hydrate: async () => {
+    const startedAt = revision;
     const records = await wavoDb.getPinnedAudioRecords();
-    set({ tracks: records.map((record) => record.downloadTrack!).sort((a, b) => a.title.localeCompare(b.title)), hydrated: true });
+    if (startedAt === revision) {
+      set({ tracks: records.map((record) => record.downloadTrack!).sort((a, b) => a.title.localeCompare(b.title)), hydrated: true });
+    } else set({ hydrated: true });
   },
-  download: async (track) => {
-    if (activeDownloads.has(track.id) || get().statusById[track.id]) return;
+  download: (track) => {
+    const pending = pendingDownloads.get(track.id);
+    if (pending) return pending;
+    if (get().tracks.some((saved) => saved.id === track.id)) return Promise.resolve();
+    if (get().statusById[track.id] === "removing") return Promise.reject(new Error("Download wird entfernt."));
     const controller = new AbortController();
     activeDownloads.set(track.id, controller);
-    set((state) => ({ statusById: { ...state.statusById, [track.id]: "downloading" } }));
-    try {
-      const blob = await completeAudioBlob(track, controller.signal);
-      if (controller.signal.aborted) throw new DOMException("Download abgebrochen", "AbortError");
-      await wavoDb.pinAudio(track, blob);
-      await audioCache.enforceCacheLimit();
-      await get().hydrate();
-    } finally {
+    set((state) => ({ statusById: { ...state.statusById, [track.id]: "queued" } }));
+    const task = (async () => {
+      const release = await downloadSlot(controller.signal);
+      try {
+        if (controller.signal.aborted) throw new DOMException("Download abgebrochen", "AbortError");
+        set((state) => ({ statusById: { ...state.statusById, [track.id]: "downloading" } }));
+        const blob = await completeAudioBlob(track, controller.signal);
+        if (controller.signal.aborted) throw new DOMException("Download abgebrochen", "AbortError");
+        await wavoDb.pinAudio(track, blob);
+        revision++;
+        set((state) => ({ tracks: [...state.tracks.filter((saved) => saved.id !== track.id), track].sort((a, b) => a.title.localeCompare(b.title)) }));
+        await audioCache.enforceCacheLimit();
+      } finally { release(); }
+    })().finally(() => {
       activeDownloads.delete(track.id);
+      pendingDownloads.delete(track.id);
       set((state) => {
         const next = { ...state.statusById };
         delete next[track.id];
         return { statusById: next };
       });
-    }
+    });
+    pendingDownloads.set(track.id, task);
+    return task;
+  },
+  downloadMany: async (tracks) => {
+    const unique = [...new Map(tracks.map((track) => [track.id, track])).values()];
+    const results = await Promise.allSettled(unique.map((track) => get().download(track)));
+    return { failed: results.filter((result) => result.status === "rejected").length };
   },
   remove: async (trackId) => {
     if (get().statusById[trackId]) return;
     set((state) => ({ statusById: { ...state.statusById, [trackId]: "removing" } }));
     try {
       await audioCache.deleteAudio(trackId);
-      await get().hydrate();
+      revision++;
+      set((state) => ({ tracks: state.tracks.filter((track) => track.id !== trackId) }));
     } finally {
       set((state) => {
         const next = { ...state.statusById };

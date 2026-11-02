@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localMusic } from "./localMusic";
 import { getAuthSession } from "./auth-session";
 import type { RecordPlaybackEventRequest, Track } from "../contracts";
@@ -21,7 +21,34 @@ beforeEach(() => {
   setUser("user-a");
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("local music library", () => {
+  it("persists development favorites without signing in and isolates them from accounts", () => {
+    vi.stubEnv("DEV", true);
+    vi.stubEnv("VITE_DEV_SKIP_LOGIN", "true");
+    vi.mocked(getAuthSession).mockReturnValue(null);
+    localMusic.likeTrack(track);
+    expect(localMusic.listLikedTracks().items[0].track).toEqual(track);
+    setUser("user-a");
+    expect(localMusic.listLikedTracks().items).toEqual([]);
+    vi.mocked(getAuthSession).mockReturnValue(null);
+    expect(localMusic.listLikedTracks().items).toHaveLength(1);
+    localMusic.unlikeTrack(track.id);
+    expect(localMusic.listLikedTracks().items).toEqual([]);
+  });
+
+  it.each([
+    [false, "true"],
+    [true, "false"],
+  ])("requires an account outside the development login bypass (%s, %s)", (dev, skipLogin) => {
+    vi.stubEnv("DEV", dev);
+    vi.stubEnv("VITE_DEV_SKIP_LOGIN", skipLogin);
+    vi.mocked(getAuthSession).mockReturnValue(null);
+    expect(() => localMusic.likeTrack(track)).toThrow("Sign in");
+    expect(localMusic.listLikedTracks().items).toEqual([]);
+  });
+
   it("persists likes separately for each signed-in account", () => {
     localMusic.likeTrack(track);
     expect(localMusic.listLikedTracks().items[0].track.title).toBe("Example Song");

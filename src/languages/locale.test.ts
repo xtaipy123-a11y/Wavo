@@ -27,6 +27,11 @@ describe("locale", () => {
     expect(getStoredLocale()).toBe("en");
   });
 
+  it.each(["de-DE", "ru-RU", "uk-UA", "es-ES", "fr-FR"])("defaults to English with a %s browser", (language) => {
+    Object.assign(window.navigator, { language, languages: [language] });
+    expect(getStoredLocale()).toBe("en");
+  });
+
   it("stores and retrieves locale", () => {
     storeLocale("ru");
     expect(getStoredLocale()).toBe("ru");
@@ -44,7 +49,8 @@ describe("locale", () => {
     expect(localStorage.getItem("wavo_locale")).toBe("uk");
   });
 
-  it("falls back to browser locale on invalid stored value", () => {
+  it("falls back to English on invalid stored value", () => {
+    Object.assign(window.navigator, { language: "de-DE", languages: ["de-DE"] });
     localStorage.setItem("wavo_locale", "fr");
     expect(getStoredLocale()).toBe("en");
   });
@@ -91,18 +97,18 @@ describe("getBrowserLocale", () => {
     vi.unstubAllGlobals();
   });
 
-  it("falls back to ru for unknown locales", () => {
+  it("falls back to English for unknown locales", () => {
     vi.stubGlobal("window", { navigator: { language: "fr-FR", languages: ["fr-FR"] } });
     vi.stubGlobal("navigator", {
       ...navigator,
       language: "fr-FR",
       languages: ["fr-FR"],
     });
-    expect(getBrowserLocale()).toBe("ru");
+    expect(getBrowserLocale()).toBe("en");
   });
 
-  it("returns ru on server side", () => {
+  it("returns English on server side", () => {
     vi.stubGlobal("window", undefined);
-    expect(getBrowserLocale()).toBe("ru");
+    expect(getBrowserLocale()).toBe("en");
   });
 });

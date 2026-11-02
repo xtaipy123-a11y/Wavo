@@ -34,6 +34,18 @@ export interface ShortcutsSettings {
   global: GlobalShortcutsSettings;
   mainApp: MainAppShortcutsSettings;
   miniplayer: MiniplayerShortcutsSettings;
+  activationScopes?: Record<string, ShortcutActivationScope>;
+}
+
+export type ShortcutActivationScope = "app" | "global";
+
+export interface ShortcutRegistrationResult {
+  registered: string[];
+  failed: Record<string, "invalid" | "conflict" | "unavailable">;
+}
+
+export function getShortcutActivationScope(settings: Pick<ShortcutsSettings, "activationScopes">, scope: ShortcutScope, action: string): ShortcutActivationScope {
+  return settings.activationScopes?.[`${scope}-${action}`] ?? (scope === "global" ? "global" : "app");
 }
 
 export const DEFAULT_SHORTCUTS: ShortcutsSettings = {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CloudSync } from "./cloudSync";
+import { CloudSync, restoreLocalProfile } from "./cloudSync";
 import { getAuthSession } from "@/shared/api";
+import { getStoredLocale } from "@/languages/locale";
 
 vi.mock("@/shared/api", () => ({ getAuthSession: vi.fn() }));
 
@@ -10,6 +11,21 @@ beforeEach(() => {
 });
 
 describe("offline cloud journal", () => {
+  it("uses English when switching to an account without a saved language", () => {
+    const languages = vi.spyOn(navigator, "languages", "get").mockReturnValue(["de-DE"]);
+    try {
+      localStorage.setItem("wavo_locale", "de");
+      restoreLocalProfile("new-account");
+      expect(getStoredLocale()).toBe("en");
+    } finally { languages.mockRestore(); }
+  });
+
+  it("keeps an account's saved language when restoring its profile", () => {
+    localStorage.setItem("wavo_local_profile_user-a", JSON.stringify({ settings: { locale: "de" } }));
+    restoreLocalProfile("user-a");
+    expect(getStoredLocale()).toBe("de");
+  });
+
   it("keeps the latest mutation and a deletion tombstone for one item", () => {
     const sync = new CloudSync("user-a");
     sync.enqueue({ kind: "like", id: "track-1", payload: { liked: true }, deleted: false });

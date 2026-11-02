@@ -417,9 +417,9 @@ function MiniPlayer({
 
   const repeatIcon = useMemo(() => {
     if (player.repeat === "one") {
-      return <RepeatOne size={18} weight="Outline" />;
+      return <RepeatOne size={18} weight="Bold" />;
     }
-    return <Repeat size={18} weight="Outline" />;
+    return <Repeat size={18} weight={player.repeat === "all" ? "Bold" : "Outline"} />;
   }, [player.repeat]);
 
   const iconButtonClass =
@@ -838,7 +838,9 @@ function MiniPlayer({
             </div>
             <button
               type="button"
-              aria-label={isLiked ? "Unlike" : "Like"}
+              aria-label={t(isLiked ? "common.remove_from_favorites" : "common.add_to_favorites")}
+              aria-pressed={isLiked}
+              title={t(isLiked ? "common.remove_from_favorites" : "common.add_to_favorites")}
               className={`${iconButtonClass} shrink-0 transition-colors duration-150 pointer-events-auto prevent-seek ${
                 isLiked ? "text-accent-primary" : "text-text-secondary hover:text-text-primary"
               }`}
@@ -874,9 +876,10 @@ function MiniPlayer({
               <button
                 type="button"
                 aria-label="Repeat"
+                aria-pressed={player.repeat !== "off"}
                 title={player.repeat === "off" ? (locale === "de" ? "Wiederholung aus" : "Repeat off") : player.repeat === "all" ? (locale === "de" ? "Playlist wiederholen" : "Repeat playlist") : (locale === "de" ? "Song wiederholen" : "Repeat song")}
-                className={`${iconButtonClass} ${
-                  player.repeat !== "off" ? "bg-bg-toolbox-active text-text-primary" : ""
+                className={`${iconButtonClass} relative ${
+                  player.repeat !== "off" ? "!bg-bg-toolbox-active !text-text-primary" : ""
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() =>
@@ -886,6 +889,9 @@ function MiniPlayer({
                 }
               >
                 {repeatIcon}
+                {player.repeat !== "off" && (
+                  <span aria-hidden="true" className="absolute bottom-[2px] h-[3px] w-[3px] rounded-full bg-current" />
+                )}
               </button>
               <button
                 ref={speedToggleRef}

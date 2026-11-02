@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { create } from "zustand";
 
 export type WindowAnimationPhase = "idle" | "closing";
@@ -33,6 +33,25 @@ export const useWindowAnimationStore = create<WindowAnimationStore>((set, get) =
 
 export function WindowAnimationContainer({ children }: { children: ReactNode }) {
   const phase = useWindowAnimationStore((s) => s.phase);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    const bridge = window.wavoElectron;
+    if (!bridge) return;
+    let active = true;
+    let receivedUpdate = false;
+    const unsubscribe = bridge.onWindowStateChange?.((state) => {
+      receivedUpdate = true;
+      if (active) setIsExpanded(state.isMaximized || state.isFullScreen);
+    });
+    void Promise.all([bridge.isMaximized?.(), bridge.isFullScreen?.()]).then(([maximized, fullscreen]) => {
+      if (active && !receivedUpdate) setIsExpanded(Boolean(maximized || fullscreen));
+    }).catch(() => {});
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, []);
 
   let transform = "none";
   let opacity = 1;
@@ -49,7 +68,9 @@ export function WindowAnimationContainer({ children }: { children: ReactNode }) 
 
   return (
     <div
-      className="h-full w-full transform-gpu"
+      className="wavo-window h-full w-full transform-gpu"
+      data-native-window-frame={window.wavoElectron?.platform === "win32" ? "true" : undefined}
+      data-window-expanded={isExpanded ? "true" : undefined}
       style={{
         transform,
         opacity,

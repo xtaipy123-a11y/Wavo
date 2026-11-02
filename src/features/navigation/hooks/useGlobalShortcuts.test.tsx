@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRoot, Root } from "react-dom/client";
 import { act } from "react";
 import { useGlobalShortcuts, type GlobalShortcutsOptions } from "./useGlobalShortcuts";
+import { useShortcutsStore } from "@/features/shortcuts";
 
 const playerState: {
   volume: number;
@@ -88,6 +89,8 @@ describe("useGlobalShortcuts", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useShortcutsStore.getState().resetAll();
+    useShortcutsStore.getState().setIsRecording(false);
     playerState.volume = 1;
     playerState.positionMs = 10_000;
     playerState.durationMs = 60_000;
@@ -104,6 +107,7 @@ describe("useGlobalShortcuts", () => {
       mounted = null;
     }
     document.body.innerHTML = "";
+    delete window.wavoElectron;
   });
 
   it("Space toggles play/pause and prevents the default page scroll", () => {
@@ -111,6 +115,49 @@ describe("useGlobalShortcuts", () => {
     const event = press("Space");
     expect(playerEngine.togglePlayPause).toHaveBeenCalledTimes(1);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("handles a native shortcut while another window has focus without executing it twice", () => {
+    let onNative!: (id: string) => void;
+    (window as any).wavoElectron = { onNativeShortcut: (cb: typeof onNative) => { onNative = cb; return vi.fn(); } };
+    const settings = useShortcutsStore.getState();
+    settings.setMainAppShortcut("playPause", "Control+Alt+P");
+    settings.setActivationScope("mainApp", "playPause", "global");
+    settings.setNativeRegistration({ registered: ["mainApp-playPause"], failed: {} });
+    mounted = mount(baseOptions());
+    const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    onNative("mainApp-playPause");
+    press("KeyP", { ctrlKey: true, altKey: true });
+    expect(playerEngine.togglePlayPause).toHaveBeenCalledTimes(1);
+    focus.mockRestore();
+  });
+
+  it("keeps the local binding usable if the OS rejects its global registration", () => {
+    useShortcutsStore.getState().setActivationScope("mainApp", "playPause", "global");
+    useShortcutsStore.getState().setNativeRegistration({ registered: [], failed: { "mainApp-playPause": "unavailable" } });
+    mounted = mount(baseOptions());
+    press("Space");
+    expect(playerEngine.togglePlayPause).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not execute stale native events after switching to app-only or while recording", () => {
+    let onNative!: (id: string) => void;
+    (window as any).wavoElectron = { onNativeShortcut: (cb: typeof onNative) => { onNative = cb; return vi.fn(); } };
+    mounted = mount(baseOptions());
+    onNative("mainApp-playPause");
+    useShortcutsStore.getState().setActivationScope("mainApp", "playPause", "global");
+    useShortcutsStore.getState().setIsRecording(true);
+    onNative("mainApp-playPause");
+    expect(playerEngine.togglePlayPause).not.toHaveBeenCalled();
+  });
+
+  it("can run the formerly global overlay shortcut only inside Wavo", () => {
+    const toggleOverlay = vi.fn();
+    (window as any).wavoElectron = { toggleOverlay };
+    useShortcutsStore.getState().setActivationScope("global", "toggleOverlay", "app");
+    mounted = mount(baseOptions());
+    press("KeyO", { altKey: true, shiftKey: true });
+    expect(toggleOverlay).toHaveBeenCalledTimes(1);
   });
 
   it("does not toggle Play/Pause while typing in an input", () => {

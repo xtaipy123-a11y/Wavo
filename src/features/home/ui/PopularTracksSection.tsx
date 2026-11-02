@@ -12,6 +12,7 @@ import ArtistLink from "@/features/artist/ui/ArtistLink";
 import CoverImage from "@/features/covers/ui/CoverImage";
 import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import { useTranslation } from "@/languages";
+import { OfflineDownloadButton } from "@/features/downloads/OfflineDownloadButton";
 
 export interface PopularTracksSectionProps {
   title: string;
@@ -156,9 +157,12 @@ function TrackCard({
       </div>
 
       <div className="flex flex-col mt-[8px]">
-        <span className="truncate text-[14px] font-[500] text-text-primary">
-          {item.item.title}
-        </span>
+        <div className="flex min-w-0 items-center justify-between gap-[4px]">
+          <span className="truncate text-[14px] font-[500] text-text-primary">
+            {item.item.title}
+          </span>
+          <OfflineDownloadButton compact tracks={[item.item]} />
+        </div>
         <div className="flex min-w-0 items-center overflow-hidden text-[13px] text-text-tertiary">
           {item.item.explicit && <ExplicitBadge size="md" className="mr-[6px] shrink-0" />}
           <ArtistLink

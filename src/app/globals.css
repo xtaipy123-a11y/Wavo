@@ -224,6 +224,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Windows clips the outer corners itself, including on maximize/restore. */
+.wavo-window[data-native-window-frame="true"],
+.wavo-window[data-window-expanded="true"] {
+  --radius-5xl: 0px;
+}
+
 html, body {
   background: transparent;
   margin: 0;
@@ -263,7 +269,7 @@ img {
   user-drag: none;
 }
 
-/* linux window drag (useWindowDrag): the compositor moves the window, so the
+/* Native window drag (useWindowDrag): the OS moves the window, so the
    drag areas are app-region boxes. later no-drag boxes win over earlier drag
    ones, and pointer-events-none boxes are skipped like the js hit test does. */
 .native-window-drag #window-drag-strip {

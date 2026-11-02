@@ -5,10 +5,13 @@ import { ToggleSwitch } from "@/shared/ui";
 import { SettingRow, SettingSection, SegmentedControl } from "../controls";
 import { activeConnect, useConnectStore } from "@/features/cloud/wavoConnect";
 import { SmartPlaylistsPanel } from "@/features/cloud/SmartPlaylistsPanel";
+import { useDiscordSettingsStore } from "@/features/discord/discordSettingsStore";
 
 export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
   const { t, locale } = useTranslation();
   const de = locale === "de";
+  const discordEnabled = useDiscordSettingsStore((state) => state.enabled);
+  const setDiscordEnabled = useDiscordSettingsStore((state) => state.setEnabled);
   const devices = useConnectStore((state) => state.devices);
   const selectedDeviceId = useConnectStore((state) => state.selectedDeviceId);
   const localDeviceId = useConnectStore((state) => state.localDeviceId);
@@ -53,6 +56,14 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
 
   return (
     <SettingSection>
+      {window.wavoElectron?.discordUpdatePlayback && <SettingRow
+        title={t("settings.discord_presence.title")}
+        description={t("settings.discord_presence.description")}
+        titleKey="settings.discord_presence.title"
+        descKey="settings.discord_presence.description"
+        searchQuery={searchQuery}
+        control={<ToggleSwitch checked={discordEnabled} onChange={setDiscordEnabled} ariaLabel={t("settings.discord_presence.title")} />}
+      />}
 
       <SettingRow
         title={t("settings.autoplay_similar.title")}

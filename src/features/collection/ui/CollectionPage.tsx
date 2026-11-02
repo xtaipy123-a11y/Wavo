@@ -19,6 +19,7 @@ import {
 import { LuRepeat, LuShuffle } from "react-icons/lu";
 import Button from "@/shared/ui/Button";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
+import { OfflineDownloadButton } from "@/features/downloads/OfflineDownloadButton";
 import CoverImage from "@/features/covers/ui/CoverImage";
 import { playerEngine } from "@/features/player";
 import { usePlayerStore } from "@/features/player/store/playerStore";
@@ -413,6 +414,7 @@ function CollectionContent() {
                 }
                   primaryAction={
                     <div className="flex flex-col gap-[8px] w-full">
+                      <OfflineDownloadButton tracks={data.tracks} />
                       <Button
                         variant={hasCustomBg ? "glass-primary" : "primary"}
                         onClick={handlePlayAll}

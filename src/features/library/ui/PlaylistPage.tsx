@@ -20,6 +20,7 @@ import { LuPencil, LuTrash2, LuText, LuShuffle, LuRepeat } from "react-icons/lu"
 import Button from "@/shared/ui/Button";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
+import { OfflineDownloadButton } from "@/features/downloads/OfflineDownloadButton";
 import CoverImage from "@/features/covers/ui/CoverImage";
 import PlaylistSuggestions from "./PlaylistSuggestions";
 import { useModalStore } from "../store/modalStore";
@@ -653,6 +654,7 @@ function LibraryPlaylistContent() {
                   }
                   primaryAction={
                     <div className="flex flex-col gap-[8px] w-full">
+                      <OfflineDownloadButton tracks={currentTracks} />
                       <Button
                         variant={hasCustomBg ? "glass-primary" : "primary"}
                         onClick={handlePlayAll}

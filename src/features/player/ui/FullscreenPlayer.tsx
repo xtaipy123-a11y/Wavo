@@ -17,7 +17,7 @@ import {
   braccatoThemeCss,
   hasSyncedLyricsSources,
 } from "@/features/lyrics";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from "framer-motion";
 import { PlayerUiElements } from "./PlayerUiElements";
 import { TimedWordLyricsView } from "./TimedWordLyricsView";
 import { WordTimingEditor } from "./WordTimingEditor";
@@ -35,6 +35,7 @@ import {
   DEFAULT_ARTWORK_SIZE,
   DEFAULT_LEFT_PANE_PERCENT,
   FULLSCREEN_ARTWORK_STORAGE_KEY,
+  FULLSCREEN_LYRICS_STORAGE_KEY,
   FULLSCREEN_PANE_STORAGE_KEY,
   getFullscreenArtworkSize,
   getLeftPaneLimits,
@@ -319,6 +320,13 @@ export function FullscreenPlayer({
   const previousBodyStylesRef = useRef<{ cursor: string; userSelect: string } | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [wordTimingEditorOpen, setWordTimingEditorOpen] = useState(false);
+  const [lyricsVisible, setLyricsVisible] = useState(() => {
+    try {
+      return localStorage.getItem(FULLSCREEN_LYRICS_STORAGE_KEY) !== "false";
+    } catch {
+      return true;
+    }
+  });
   const [preferredLeftPercent, setPreferredLeftPercent] = useState(() => {
     try {
       const saved = Number(localStorage.getItem(FULLSCREEN_PANE_STORAGE_KEY));
@@ -338,7 +346,29 @@ export function FullscreenPlayer({
   });
   const leftPercent = clampLeftPanePercent(preferredLeftPercent, containerSize.width);
   const paneLimits = getLeftPaneLimits(containerSize.width);
-  const artworkSize = getFullscreenArtworkSize(preferredArtworkSize, leftPercent, containerSize.width, containerSize.height);
+  const reduceMotion = useReducedMotion();
+  const panePercent = useMotionValue(lyricsVisible ? leftPercent : 100);
+  const [playerPanePercent, setPlayerPanePercent] = useState(panePercent.get());
+  useMotionValueEvent(panePercent, "change", setPlayerPanePercent);
+  const showLyricsPane = lyricsVisible || playerPanePercent < 100;
+  const isPaneTransitioning = Math.abs(playerPanePercent - (lyricsVisible ? leftPercent : 100)) > 0.01;
+  // Slide a fixed-width lyrics layout through its clipped slot without rewrapping the text.
+  const lyricsPaneWidth = containerSize.width * (1 - leftPercent / 100);
+  const artworkSize = getFullscreenArtworkSize(preferredArtworkSize, playerPanePercent, containerSize.width, containerSize.height);
+
+  useEffect(() => {
+    const controls = animate(panePercent, lyricsVisible ? leftPercent : 100, {
+      duration: reduceMotion || isDraggingSplitRef.current ? 0 : 0.46,
+      ease: [0.22, 1, 0.36, 1],
+    });
+    return () => controls.stop();
+  }, [panePercent, lyricsVisible, leftPercent, reduceMotion]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FULLSCREEN_LYRICS_STORAGE_KEY, String(lyricsVisible));
+    } catch {}
+  }, [lyricsVisible]);
 
   useEffect(() => {
     const container = splitContainerRef.current;
@@ -496,10 +526,16 @@ export function FullscreenPlayer({
       <div ref={splitContainerRef} className="absolute inset-0 z-10 flex">
         <div
           className="flex-none min-w-0 overflow-x-hidden overflow-y-auto px-4 flex flex-col items-center gap-5"
-          style={{ width: `${leftPercent}%`, justifyContent: "safe center" }}
+          style={{ width: `${playerPanePercent}%`, justifyContent: "safe center" }}
         >
           <PlayerUiElements
             onClose={onClose}
+            lyricsVisible={lyricsVisible}
+            onToggleLyrics={() => {
+              stopDraggingSplit();
+              setWordTimingEditorOpen(false);
+              setLyricsVisible((visible) => !visible);
+            }}
             artworkSize={artworkSize}
             preferredArtworkSize={preferredArtworkSize}
             onArtworkSizeChange={(size) => {
@@ -510,169 +546,187 @@ export function FullscreenPlayer({
         </div>
 
         <div
-          role="separator"
-          aria-label={t("player.resize_left_panel")}
-          aria-orientation="vertical"
-          aria-valuemin={Math.round(paneLimits.min)}
-          aria-valuemax={Math.round(paneLimits.max)}
-          aria-valuenow={Math.round(leftPercent)}
-          tabIndex={0}
-          title={t("player.resize_left_panel")}
-          data-no-window-drag
-          onPointerDown={handleSplitPointerDown}
-          onPointerMove={(event) => {
-            if (isDraggingSplitRef.current) updateSplitFromPointer(event.clientX);
-          }}
-          onPointerUp={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-            stopDraggingSplit();
-          }}
-          onPointerCancel={stopDraggingSplit}
-          onLostPointerCapture={stopDraggingSplit}
-          onKeyDown={handleSplitKeyDown}
-          onDoubleClick={() => {
-            updateLeftPercent(DEFAULT_LEFT_PANE_PERCENT, containerSize.width);
-            saveLeftPercent();
-          }}
-          className="group relative z-20 flex w-3 shrink-0 touch-none cursor-col-resize items-center justify-center outline-none"
+          id="fullscreen-player-lyrics"
+          aria-hidden={!lyricsVisible}
+          inert={!lyricsVisible}
+          className="h-full min-w-0 flex-1 overflow-hidden"
         >
-          <span className="h-full w-px bg-white/10 transition-colors group-hover:bg-white/35 group-focus-visible:bg-white/60" />
-          <span className="absolute h-14 w-1 rounded-full bg-white/35 transition-colors group-hover:bg-white/75 group-focus-visible:bg-white" />
-        </div>
-
-        <div className="min-w-0 flex-1 h-full min-h-0 pl-2 pr-6 flex flex-col relative">
-          {hasLyrics && !lyricsLoading && (
-            <div className="absolute right-1 top-[52px] z-30 flex items-center gap-2 rounded-lg bg-black/50 px-2 py-1.5 text-[11px] text-white/70 backdrop-blur-xl">
-              <span>{t(hasWordTiming ? "player.word_timing_available" : "player.line_timing_only")}</span>
-              {canEditWordTiming && (
-                <button type="button" onClick={() => setWordTimingEditorOpen(true)} className="rounded-md bg-white/15 px-2 py-1 text-white hover:bg-white/25">
-                  {t("player.word_timing_edit")}
-                </button>
-              )}
-            </div>
-          )}
-          {showProviderIsland && (
-            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">
-              <LyricsProviderIsland />
-            </div>
-          )}
-
-          <div
-            className="flex-1 min-h-0 relative w-full h-full"
-            style={{
-              display: hasLyrics ? "flex" : "none",
-            }}
+        {showLyricsPane && (
+          <motion.div
+            initial={false}
+            animate={{ opacity: lyricsVisible ? 1 : 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+            className="flex h-full"
+            style={{ width: lyricsPaneWidth || undefined }}
           >
-            <AnimatePresence initial={false}>
-              {hasLyrics && (
-                <motion.div
-                  key={`lyrics-${currentTrackId}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0, pointerEvents: "none" }}
-                  transition={{ duration: 0.22, ease: "easeInOut" }}
-                  className="absolute inset-0 flex flex-col"
-                >
-                  {hasWordTiming
-                    ? <TimedWordLyricsView lines={syncedLines} />
-                    : <BraccatoLyricsView lyrics={braccatoLyrics} />}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+            <div
+              role="separator"
+              aria-label={t("player.resize_left_panel")}
+              aria-orientation="vertical"
+              aria-valuemin={Math.round(paneLimits.min)}
+              aria-valuemax={Math.round(paneLimits.max)}
+              aria-valuenow={Math.round(leftPercent)}
+              tabIndex={isPaneTransitioning ? -1 : 0}
+              title={t("player.resize_left_panel")}
+              data-no-window-drag
+              onPointerDown={handleSplitPointerDown}
+              onPointerMove={(event) => {
+                if (isDraggingSplitRef.current) updateSplitFromPointer(event.clientX);
+              }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+                stopDraggingSplit();
+              }}
+              onPointerCancel={stopDraggingSplit}
+              onLostPointerCapture={stopDraggingSplit}
+              onKeyDown={handleSplitKeyDown}
+              onDoubleClick={() => {
+                updateLeftPercent(DEFAULT_LEFT_PANE_PERCENT, containerSize.width);
+                saveLeftPercent();
+              }}
+              className="group relative z-20 flex w-3 shrink-0 touch-none cursor-col-resize items-center justify-center outline-none"
+              style={{ pointerEvents: isPaneTransitioning ? "none" : undefined }}
+            >
+              <span className="h-full w-px bg-white/10 transition-colors group-hover:bg-white/35 group-focus-visible:bg-white/60" />
+              <span className="absolute h-14 w-1 rounded-full bg-white/35 transition-colors group-hover:bg-white/75 group-focus-visible:bg-white" />
+            </div>
 
-          <AnimatePresence mode="wait">
-            {!hasLyrics && lyricsLoading ? (
-              <motion.div
-                key="skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 flex flex-col items-center justify-center"
-              >
-                <div className="flex flex-col gap-5 w-full max-w-[500px]">
-                  {[80, 65, 45, 70, 55, 85, 60, 50, 75, 40, 65, 55].map(
-                    (w, i) => (
-                      <div
-                        key={i}
-                        className="h-5 rounded animate-pulse bg-border-alpha-14"
-                        style={{ width: `${w}%` }}
-                      />
-                    ),
+            <div className="min-w-0 flex-1 h-full min-h-0 overflow-hidden pl-2 pr-6 flex flex-col relative">
+              {hasLyrics && !lyricsLoading && (
+                <div className="absolute right-1 top-[52px] z-30 flex items-center gap-2 rounded-lg bg-black/50 px-2 py-1.5 text-[11px] text-white/70 backdrop-blur-xl">
+                  <span>{t(hasWordTiming ? "player.word_timing_available" : "player.line_timing_only")}</span>
+                  {canEditWordTiming && (
+                    <button type="button" onClick={() => setWordTimingEditorOpen(true)} className="rounded-md bg-white/15 px-2 py-1 text-white hover:bg-white/25">
+                      {t("player.word_timing_edit")}
+                    </button>
                   )}
                 </div>
-              </motion.div>
-            ) : !hasLyrics && isInstrumental ? (
-              <motion.div
-                key="instrumental"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 flex items-center justify-center text-text-tertiary text-lg"
-              >
-                <span>{t("player.instrumental")}</span>
-              </motion.div>
-            ) : !hasLyrics && hasPlainLyrics ? (
-              <motion.div
-                key={`plain-lyrics-${currentTrackId}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 overflow-y-auto px-10 py-16 text-center"
-              >
-                <p className="mx-auto max-w-[720px] whitespace-pre-line text-[clamp(20px,2.4vw,32px)] font-semibold leading-relaxed text-white/90">
-                  {plainLyrics}
-                </p>
-              </motion.div>
-            ) : !hasLyrics ? (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 flex items-center justify-center text-text-tertiary"
-              >
-                <div className="flex flex-col items-center justify-center gap-3 opacity-80">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="48"
-                    height="48"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-40"
-                  >
-                    <path d="M9 18V5l12-2v13"></path>
-                    <circle cx="6" cy="18" r="3"></circle>
-                    <circle cx="18" cy="16" r="3"></circle>
-                    <line x1="2" y1="2" x2="22" y2="22"></line>
-                  </svg>
-                  <span
-                    className="text-[15px] font-[400] max-w-[250px] text-center"
-                    style={{ lineHeight: "1.4" }}
-                  >
-                    {lyricsError ? t("player.lyrics_load_failed") : t("player.no_lyrics_found")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => playerEngine.retryLyrics()}
-                    className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-white/20"
-                  >
-                    {t("error_screen.try_again")}
-                  </button>
+              )}
+              {showProviderIsland && (
+                <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">
+                  <LyricsProviderIsland />
                 </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+              )}
+
+              <div
+                className="flex-1 min-h-0 relative w-full h-full"
+                style={{
+                  display: hasLyrics ? "flex" : "none",
+                }}
+              >
+                <AnimatePresence initial={false}>
+                  {hasLyrics && (
+                    <motion.div
+                      key={`lyrics-${currentTrackId}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, pointerEvents: "none" }}
+                      transition={{ duration: 0.22, ease: "easeInOut" }}
+                      className="absolute inset-0 flex flex-col"
+                    >
+                      {hasWordTiming
+                        ? <TimedWordLyricsView lines={syncedLines} />
+                        : <BraccatoLyricsView lyrics={braccatoLyrics} />}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <AnimatePresence mode="wait">
+                {!hasLyrics && lyricsLoading ? (
+                  <motion.div
+                    key="skeleton"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex flex-col items-center justify-center"
+                  >
+                    <div className="flex flex-col gap-5 w-full max-w-[500px]">
+                      {[80, 65, 45, 70, 55, 85, 60, 50, 75, 40, 65, 55].map(
+                        (w, i) => (
+                          <div
+                            key={i}
+                            className="h-5 rounded animate-pulse bg-border-alpha-14"
+                            style={{ width: `${w}%` }}
+                          />
+                        ),
+                      )}
+                    </div>
+                  </motion.div>
+                ) : !hasLyrics && isInstrumental ? (
+                  <motion.div
+                    key="instrumental"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex items-center justify-center text-text-tertiary text-lg"
+                  >
+                    <span>{t("player.instrumental")}</span>
+                  </motion.div>
+                ) : !hasLyrics && hasPlainLyrics ? (
+                  <motion.div
+                    key={`plain-lyrics-${currentTrackId}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 overflow-y-auto px-10 py-16 text-center"
+                  >
+                    <p className="mx-auto max-w-[720px] whitespace-pre-line text-[clamp(20px,2.4vw,32px)] font-semibold leading-relaxed text-white/90">
+                      {plainLyrics}
+                    </p>
+                  </motion.div>
+                ) : !hasLyrics ? (
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex items-center justify-center text-text-tertiary"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-3 opacity-80">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="opacity-40"
+                      >
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                        <line x1="2" y1="2" x2="22" y2="22"></line>
+                      </svg>
+                      <span
+                        className="text-[15px] font-[400] max-w-[250px] text-center"
+                        style={{ lineHeight: "1.4" }}
+                      >
+                        {lyricsError ? t("player.lyrics_load_failed") : t("player.no_lyrics_found")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => playerEngine.retryLyrics()}
+                        className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-white/20"
+                      >
+                        {t("error_screen.try_again")}
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
         </div>
       </div>
 

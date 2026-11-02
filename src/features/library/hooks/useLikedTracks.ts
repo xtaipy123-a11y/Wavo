@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { api, getAuthSession, toClientTrack } from "@/shared/api";
 import type { Track } from "@/shared/types";
+import { getFavoritesOwnerId } from "@/shared/api/favoritesIdentity";
 
 type LikedData = { tracks: Track[]; total: number };
 const EMPTY: LikedData = { tracks: [], total: 0 };
@@ -58,7 +59,7 @@ const SERVER_SNAPSHOT = { data: EMPTY, isLoading: true };
 
 function load(force = false): Promise<void> {
   const session = getAuthSession();
-  const nextOwnerId = session?.accessToken ? session.user?.id ?? null : null;
+  const nextOwnerId = getFavoritesOwnerId(session?.user?.id);
   if (nextOwnerId !== ownerId) {
     ownerId = nextOwnerId;
     generation++;

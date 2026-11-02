@@ -31,6 +31,9 @@ import {
   type MainAppShortcutsSettings,
   type MiniplayerShortcutsSettings,
   ResetIcon,
+  getShortcutActivationScope,
+  hasModifier,
+  type ShortcutActivationScope,
 } from "@/features/shortcuts";
 import { ShortcutRecorder } from "@/features/shortcuts/ui/ShortcutRecorder";
 
@@ -62,6 +65,10 @@ export function ShortcutsTab({ searchQuery: externalQuery }: { searchQuery?: str
   const global = useShortcutsStore((state) => state.global);
   const mainApp = useShortcutsStore((state) => state.mainApp);
   const miniplayer = useShortcutsStore((state) => state.miniplayer);
+  const activationScopes = useShortcutsStore((state) => state.activationScopes);
+  const nativeRegistration = useShortcutsStore((state) => state.nativeRegistration);
+  const isRecordingAny = useShortcutsStore((state) => state.isRecording);
+  const setActivationScope = useShortcutsStore((state) => state.setActivationScope);
 
   const setGlobalShortcut = useShortcutsStore((state) => state.setGlobalShortcut);
   const setMainAppShortcut = useShortcutsStore((state) => state.setMainAppShortcut);
@@ -548,6 +555,13 @@ export function ShortcutsTab({ searchQuery: externalQuery }: { searchQuery?: str
   ]);
 
   const effectiveQuery = (localSearchQuery || externalQuery || "").trim();
+  const activationFor = (item: ShortcutRowItem) => getShortcutActivationScope({ activationScopes }, item.scope, item.id.slice(item.scope.length + 1));
+  const findConflict = (item: ShortcutRowItem, candidate: string, activation = activationFor(item)) => {
+    const normalized = normalizeShortcutToEnglish(candidate).toLowerCase();
+    const other = allItems.find((other) => other.id !== item.id && normalizeShortcutToEnglish(other.value).toLowerCase() === normalized &&
+      (other.scope === item.scope || activation === "global" || activationFor(other) === "global" || item.scope === "global" || other.scope === "global"));
+    return other ? { conflictWith: other.title } : null;
+  };
   const isSearching = Boolean(effectiveQuery);
 
   const filteredItems = useMemo(() => {
@@ -561,15 +575,16 @@ export function ShortcutsTab({ searchQuery: externalQuery }: { searchQuery?: str
           item.value.toLowerCase().includes(q)
       );
     }
-    return allItems.filter((item) => item.scope === activeScope);
-  }, [allItems, isSearching, effectiveQuery, activeScope, scopeTagLabels]);
+    return allItems.filter((item) => activeScope === "global" ? activationFor(item) === "global" :
+      item.scope === activeScope || (activeScope === "mainApp" && item.scope === "global" && activationFor(item) === "app"));
+  }, [allItems, isSearching, effectiveQuery, activeScope, scopeTagLabels, activationScopes]);
 
   const tabs = useMemo(
     () => [
       {
         value: "mainApp" as ScopeFilter,
         label: t("settings.shortcuts.tab_main_app") || "Main App",
-        count: allItems.filter((i) => i.scope === "mainApp").length,
+        count: allItems.filter((i) => i.scope === "mainApp" || (i.scope === "global" && activationFor(i) === "app")).length,
       },
       {
         value: "miniplayer" as ScopeFilter,
@@ -579,10 +594,10 @@ export function ShortcutsTab({ searchQuery: externalQuery }: { searchQuery?: str
       {
         value: "global" as ScopeFilter,
         label: t("settings.shortcuts.tab_global") || "Global",
-        count: allItems.filter((i) => i.scope === "global").length,
+        count: allItems.filter((i) => activationFor(i) === "global").length,
       },
     ],
-    [t, allItems]
+    [t, allItems, activationScopes]
   );
 
   return (
@@ -706,47 +721,79 @@ export function ShortcutsTab({ searchQuery: externalQuery }: { searchQuery?: str
             filteredItems.map((item) => {
               const Icon = item.icon;
               const isRowRecording = recordingId === item.id;
+              const activation = activationFor(item);
+              const badgeScope = item.scope === "global" && activation === "app" ? "mainApp" : item.scope;
+              const invalidGlobal = activation === "global" && !hasModifier(item.value) && !/^F\d{1,2}$/i.test(item.value);
+              const registrationFailed = activation === "global" && nativeRegistration.failed[item.id];
               return (
-                <div
-                  key={item.id}
-                  data-shortcut-row={item.id}
-                  onClick={() => {
-                    setRecordingId((prev) => (prev === item.id ? null : item.id));
-                  }}
-                  className="h-[44px] min-h-[44px] flex items-center justify-between gap-4 px-3 rounded-xl hover:bg-border-alpha-10 transition-colors group select-none cursor-pointer"
-                >
-                  {/* Left: Icon + Title + Scope Badge */}
-                  <div className="flex items-center gap-3 min-w-0 pointer-events-none">
-                    <span className="text-text-tertiary group-hover:text-text-primary transition-colors shrink-0 flex items-center justify-center w-[20px] h-[20px]">
-                      <Icon size={18} weight="Bold" />
-                    </span>
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[13.5px] font-[500] text-text-primary truncate" style={font}>
-                        {item.title}
+                <div key={item.id} className="flex flex-col">
+                  <div
+                    data-shortcut-row={item.id}
+                    onClick={() => {
+                      setRecordingId((prev) => (prev === item.id ? null : item.id));
+                    }}
+                    className="h-[44px] min-h-[44px] flex items-center justify-between gap-4 px-3 rounded-xl hover:bg-border-alpha-10 transition-colors group select-none cursor-pointer"
+                  >
+                    {/* Left: Icon + Title + Scope Badge */}
+                    <div className="flex items-center gap-3 min-w-0 pointer-events-none">
+                      <span className="text-text-tertiary group-hover:text-text-primary transition-colors shrink-0 flex items-center justify-center w-[20px] h-[20px]">
+                        <Icon size={18} weight="Bold" />
                       </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10.5px] font-[500] shrink-0 tracking-wide ${scopeTagStyles[item.scope]}`}
-                        style={font}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-[13.5px] font-[500] text-text-primary truncate" style={font}>
+                          {item.title}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10.5px] font-[500] shrink-0 tracking-wide ${scopeTagStyles[badgeScope]}`}
+                          style={font}
+                        >
+                          {scopeTagLabels[badgeScope]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Right: Shortcut Recorder */}
+                    <div className="flex shrink-0 items-center gap-3" onClick={(event) => event.stopPropagation()}>
+                      <select
+                        aria-label={`${t("settings.shortcuts.activation_scope")}: ${item.title}`}
+                        title={t("settings.shortcuts.activation_scope_hint")}
+                        value={activation}
+                        className="max-w-[145px] rounded-md border border-border-primary bg-bg-elevated px-2 py-1 text-[12px] text-text-primary cursor-pointer"
+                        onChange={(event) => {
+                          const value = event.target.value as ShortcutActivationScope;
+                          const needsNewBinding = value === "global" && !hasModifier(item.value) && !/^F\d{1,2}$/i.test(item.value);
+                          const conflict = needsNewBinding ? null : findConflict(item, item.value, value);
+                          if (conflict) {
+                            toast(t("settings.shortcuts.conflict_error", { action: conflict.conflictWith }), "error");
+                            return;
+                          }
+                          setActivationScope(item.scope, item.id.slice(item.scope.length + 1), value);
+                          setRecordingId(needsNewBinding ? item.id : null);
+                        }}
                       >
-                        {scopeTagLabels[item.scope]}
-                      </span>
+                        <option value="app">{t(item.scope === "miniplayer" ? "settings.shortcuts.only_overlay" : "settings.shortcuts.only_app")}</option>
+                        <option value="global" disabled={!window.wavoElectron?.configureShortcuts}>{t("settings.shortcuts.scope_global")}</option>
+                      </select>
+                      <ShortcutRecorder
+                        value={item.value}
+                        defaultValue={item.defaultValue}
+                        onChange={(val) => {
+                          item.onChange(val);
+                          setRecordingId(null);
+                        }}
+                        onReset={item.onReset}
+                        isGlobal={activation === "global"}
+                        validateCandidate={(candidate) => findConflict(item, candidate)}
+                        isRecording={isRowRecording}
+                        onRecordingChange={(rec) => setRecordingId(rec ? item.id : null)}
+                      />
                     </div>
                   </div>
-
-                  {/* Right: Shortcut Recorder */}
-                  <ShortcutRecorder
-                    value={item.value}
-                    defaultValue={item.defaultValue}
-                    onChange={(val) => {
-                      item.onChange(val);
-                      setRecordingId(null);
-                    }}
-                    onReset={item.onReset}
-                    isGlobal={item.scope === "global"}
-                    validateCandidate={item.validateCandidate}
-                    isRecording={isRowRecording}
-                    onRecordingChange={(rec) => setRecordingId(rec ? item.id : null)}
-                  />
+                  {!isRecordingAny && (invalidGlobal || registrationFailed) && (
+                    <p role="status" className="my-0 px-3 pb-2 text-[11px] text-amber-500 dark:text-amber-300">
+                      {t(invalidGlobal ? "settings.shortcuts.modifier_required" : "settings.shortcuts.global_unavailable")}
+                    </p>
+                  )}
                 </div>
               );
             })

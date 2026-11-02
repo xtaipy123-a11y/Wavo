@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useShortcutsStore } from "./shortcutsStore";
-import { DEFAULT_SHORTCUTS } from "../types";
+import { DEFAULT_SHORTCUTS, getShortcutActivationScope } from "../types";
 import { useOverlaySettingsStore } from "@/features/overlay/store/overlaySettingsStore";
 
 describe("shortcutsStore", () => {
@@ -80,5 +80,37 @@ describe("shortcutsStore", () => {
     useShortcutsStore.getState().setIsRecording(false);
     expect(useShortcutsStore.getState().isRecording).toBe(false);
     expect(pauseOverlayShortcuts).toHaveBeenCalledWith(false);
+  });
+
+  it("persists activation scopes without persisting native registration status", () => {
+    useShortcutsStore.getState().setActivationScope("mainApp", "playPause", "global");
+    useShortcutsStore.getState().setNativeRegistration({ registered: ["mainApp-playPause"], failed: {} });
+    const saved = JSON.parse(localStorage.getItem("wavo_shortcuts_settings_v1")!).state;
+    expect(saved.activationScopes).toEqual({ "mainApp-playPause": "global" });
+    expect(saved.nativeRegistration).toBeUndefined();
+  });
+
+  it("can restrict a previously global overlay action to Wavo", () => {
+    const updateOverlaySettings = vi.fn();
+    (window as any).wavoElectron = { updateOverlaySettings };
+    useShortcutsStore.getState().setActivationScope("global", "toggleOverlay", "app");
+    expect(updateOverlaySettings).toHaveBeenLastCalledWith(expect.objectContaining({ shortcutGlobal: false, likeShortcutGlobal: true }));
+  });
+
+  it("restores scope defaults when resetting an action or section", () => {
+    const store = useShortcutsStore.getState();
+    store.setActivationScope("global", "toggleOverlay", "app");
+    store.setActivationScope("mainApp", "nextTrack", "global");
+    store.resetShortcut("global", "toggleOverlay");
+    expect(getShortcutActivationScope(useShortcutsStore.getState(), "global", "toggleOverlay")).toBe("global");
+    store.resetSection("mainApp");
+    expect(getShortcutActivationScope(useShortcutsStore.getState(), "mainApp", "nextTrack")).toBe("app");
+  });
+
+  it("retains the previous behavior for settings saved before scopes existed", async () => {
+    localStorage.setItem("wavo_shortcuts_settings_v1", JSON.stringify({ state: DEFAULT_SHORTCUTS, version: 0 }));
+    await useShortcutsStore.persist.rehydrate();
+    expect(getShortcutActivationScope(useShortcutsStore.getState(), "mainApp", "playPause")).toBe("app");
+    expect(getShortcutActivationScope(useShortcutsStore.getState(), "global", "quickLikeSong")).toBe("global");
   });
 });

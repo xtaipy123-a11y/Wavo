@@ -11,7 +11,7 @@ export function getStoredLocale(): Locale {
     storeLocale("uk");
     return "uk";
   }
-  return getBrowserLocale();
+  return "en";
 }
 
 export function storeLocale(locale: Locale): void {
@@ -23,7 +23,7 @@ export function storeLocale(locale: Locale): void {
 }
 
 export function getBrowserLocale(): Locale {
-  if (typeof window === "undefined") return "ru";
+  if (typeof window === "undefined") return "en";
   const langs = window.navigator.languages ?? [window.navigator.language];
   for (const l of langs) {
     const code = l.slice(0, 2).toLowerCase();
@@ -33,5 +33,5 @@ export function getBrowserLocale(): Locale {
     if (code === "ru") return "ru";
     if (code === "uk" || code === "ua") return "uk";
   }
-  return "ru";
+  return "en";
 }

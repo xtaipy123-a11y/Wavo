@@ -5,6 +5,7 @@ import { playerEngine } from "../engine/playerEngine";
 import { usePlayerStore } from "../store/playerStore";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
+import { OfflineDownloadButton } from "@/features/downloads/OfflineDownloadButton";
 
 import type { TrackArtist } from "@/shared/types";
 
@@ -172,6 +173,12 @@ function SongCardWithMenu({
       onNavigate={onNavigate}
       compact={compact}
       icon={icon}
+      actions={id && (!searchType || searchType === "track") ? (
+        <OfflineDownloadButton compact tracks={[{
+          id, title, artists, artistId, artistList, coverUrl,
+          durationMs: resolvedDurationMs, explicit, playCount: 0,
+        }]} />
+      ) : undefined}
       showReorderHandle={showReorderHandle}
       onGrabStart={onGrabStart}
     />

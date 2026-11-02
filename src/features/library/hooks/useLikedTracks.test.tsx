@@ -7,13 +7,15 @@ import { useLikedTracks, applyOptimisticLike } from "./useLikedTracks";
 import { api } from "@/shared/api";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-const authState = vi.hoisted(() => ({ userId: "u1" }));
+const authState = vi.hoisted(() => ({ userId: "u1" as string | null, accessToken: "test-token" }));
 
 vi.mock("@/shared/api", () => ({
   api: {
     listLikedTracks: vi.fn(),
   },
-  getAuthSession: () => ({ accessToken: "test-token", user: { id: authState.userId } }),
+  getAuthSession: () => authState.userId
+    ? { accessToken: authState.accessToken, user: { id: authState.userId } }
+    : null,
   toClientTrack: (track: any) => ({
     id: track.id,
     title: track.title,
@@ -30,6 +32,7 @@ describe("useLikedTracks", () => {
 
   beforeEach(() => {
     authState.userId = "u1";
+    authState.accessToken = "test-token";
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -41,6 +44,27 @@ describe("useLikedTracks", () => {
       root.unmount();
     });
     document.body.removeChild(container);
+    vi.unstubAllEnvs();
+  });
+
+  it.each([null, "offline-user"])("loads local favorites without an access token for %s", async (userId) => {
+    vi.stubEnv("DEV", true);
+    vi.stubEnv("VITE_DEV_SKIP_LOGIN", "true");
+    authState.userId = userId;
+    authState.accessToken = "";
+    vi.mocked(api.listLikedTracks).mockResolvedValue({
+      items: [{ track: { id: "local-favorite", title: "Local favorite" } }],
+      nextCursor: null,
+    } as any);
+    let result: ReturnType<typeof useLikedTracks> | undefined;
+    function TestComponent() {
+      result = useLikedTracks();
+      return null;
+    }
+    await act(async () => { root.render(<TestComponent />); });
+    expect(api.listLikedTracks).toHaveBeenCalled();
+    expect(result?.data.tracks.map((track) => track.id)).toEqual(["local-favorite"]);
+    expect(result?.isLoading).toBe(false);
   });
 
   it("does not flip isLoading to true when library:changed event is dispatched after initial load", async () => {

@@ -1,4 +1,14 @@
 {
+  "downloads": {
+    "save_offline": "Offline speichern",
+    "downloading": "Wird heruntergeladen …",
+    "saved": "Offline gespeichert",
+    "failed": "Download fehlgeschlagen",
+    "failed_count": "{count} Songs konnten nicht heruntergeladen werden. Versuche es erneut, um die fehlenden Songs zu laden.",
+    "auto_failed": "Automatischer Download unvollständig",
+    "auto_retry": "{count} Songs sind vorgemerkt. Wavo versucht es bei erneuter Verbindung oder beim nächsten Start wieder.",
+    "empty_hint": "Klicke auf das Download-Symbol neben einem Song oder auf „Offline speichern“ in einer Playlist."
+  },
   "artist": {
     "no_biography": "Keine Biografie",
     "followers": "follower",
@@ -45,7 +55,7 @@
     "app": {
       "name": "Wavo",
       "description": "Mehr von dem, was Ihnen gefällt",
-      "version": "Version 0.1.0"
+      "version": "Version 0.1.55"
     },
     "sidebar": {
       "home": "Startseite",
@@ -159,8 +169,10 @@
     "liked_songs": "Favoriten",
     "start_radio": "Startstation",
     "play_next": "Als Nächstes abspielen",
-    "like": "Gefällt mir",
-    "unlike": "Im Gegensatz zu",
+    "like": "Zu Favoriten hinzufügen",
+    "add_to_favorites": "Zu Favoriten hinzufügen",
+    "remove_from_favorites": "Aus Favoriten entfernen",
+    "unlike": "Aus Favoriten entfernen",
     "add_to_playlist": "Zur Wiedergabeliste hinzufügen",
     "remove_from_playlist": "Aus Wiedergabeliste entfernen",
     "no_items": "Noch keine Artikel",
@@ -210,7 +222,7 @@
   },
   "library": {
     "title": "Bibliothek",
-    "liked_songs": "Lieblingssongs",
+    "liked_songs": "Favoriten",
     "song": "lied",
     "songs": "lieder",
     "track": "nachverfolgen",
@@ -350,6 +362,8 @@
     "choose_track": "Wähle einen Titel aus der Suche",
     "queue": "Warteschlange",
     "lyrics": "Liedtext",
+    "show_lyrics": "Liedtext einblenden",
+    "hide_lyrics": "Liedtext ausblenden",
     "lyrics_upgraded": "Liedtext aktualisiert!",
     "playing_from": "Wiedergabe aus",
     "autoplay_radio": "Autoplay-Radio",
@@ -380,6 +394,7 @@
     "close_fullscreen": "Vollbild schließen",
     "resize_left_panel": "Linken Playerbereich vergrößern oder verkleinern. Doppelklick setzt zurück.",
     "artwork_size": "Covergröße",
+    "options": "Player-Einstellungen",
     "word_timing_available": "Wort-Timing",
     "line_timing_only": "Nur Zeilen-Timing",
     "word_timing_edit": "Wörter timen",
@@ -421,7 +436,7 @@
   },
   "playlist": {
     "playlist": "Wiedergabeliste",
-    "liked_songs": "Lieblingssongs",
+    "liked_songs": "Favoriten",
     "untitled_playlist": "Unbenannte Wiedergabeliste",
     "play_all": "Alle abspielen",
     "add_to_queue": "Wiedergabeliste zu einer Warteschlange hinzufügen",
@@ -448,6 +463,17 @@
     "type_to_search": "Suchbegriff eingeben"
   },
   "settings": {
+    "discord_presence": {
+      "title": "Discord Rich Presence",
+      "description": "Zeige Song, Künstler und Wiedergabefortschritt auf Discord mit einem Wavo-Download-Link. Benötigt die Discord-Desktop-App und aktivierte Aktivitätsfreigabe."
+    },
+    "offline_downloads": {
+      "title": "Offline-Downloads",
+      "favorites": "Favoriten automatisch herunterladen",
+      "favorites_description": "Neu favorisierte Songs auf diesem Gerät zum Offline-Hören speichern.",
+      "playlists": "Playlist-Songs automatisch herunterladen",
+      "playlists_description": "Songs auf diesem Gerät speichern, wenn du sie zu deinen Playlists hinzufügst – auch bei Importen."
+    },
     "title": "Einstellungen",
     "search_placeholder": "Sucheinstellungen...",
     "subtitle": "Verwalte deine Einstellungen",
@@ -533,6 +559,11 @@
       "tab_overlay": "Überlagerung",
       "tab_global": "Global",
       "scope_global": "Global",
+      "activation_scope": "Geltungsbereich",
+      "activation_scope_hint": "Global gilt auch, wenn ein anderes Programm aktiv ist.",
+      "only_app": "Nur in Wavo",
+      "only_overlay": "Nur im Overlay",
+      "global_unavailable": "Dieses Kürzel ist global nicht verfügbar. Wähle eine andere Kombination.",
       "scope_main_app": "Haupt-App",
       "scope_overlay": "Überlagerung",
       "reset_section": "Abschnitt zurücksetzen"

@@ -1,87 +1,154 @@
 .wavo-friends-page {
+  --social-line: var(--border-white-alpha-14);
+  --social-cyan: #36c8dd;
+  --social-violet: #ad96ef;
   container-type: inline-size;
-  padding: 28px 24px;
+  padding: 38px clamp(20px, 4vw, 64px) 28px;
+  color: var(--text-primary);
 }
 
-.wavo-social-layout {
-  display: grid;
-  grid-template-columns: clamp(220px, 26%, 320px) minmax(0, 1fr);
-  align-items: stretch;
-  gap: 12px;
-}
+.wavo-friends-content { max-width: 1320px; margin-inline: auto; }
+.wavo-friends-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.wavo-friends-eyebrow { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 10px; font-weight: 650; letter-spacing: .16em; }
+.wavo-friends-header h1 { margin: 6px 0 4px; font-size: clamp(30px, 3vw, 42px); font-weight: 750; letter-spacing: -.055em; line-height: 1.1; }
+.wavo-friends-header h1 > span { color: var(--social-cyan); }
+.wavo-friends-header p { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
+.wavo-activity-toggle { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--social-line); border-radius: 12px; cursor: pointer; }
+.wavo-activity-toggle > svg { color: var(--text-secondary); }
+.wavo-activity-toggle strong, .wavo-activity-toggle small { display: block; font-weight: 500; }
+.wavo-activity-toggle strong { font-size: 12px; }
+.wavo-activity-toggle small { margin-top: 3px; font-size: 10px; color: var(--text-secondary); }
+.wavo-activity-toggle input { position: absolute; right: 14px; width: 34px; height: 20px; opacity: 0; cursor: pointer; }
+.wavo-switch-track { width: 34px; height: 20px; flex-shrink: 0; border-radius: 20px; background: var(--bg-panel); border: 1px solid var(--border-white-alpha-33); transition: background .18s; pointer-events: none; }
+.wavo-switch-track::after { content: ''; display: block; width: 12px; height: 12px; margin: 3px; background: var(--text-secondary); border-radius: 50%; transition: transform .18s; }
+.wavo-activity-toggle input:checked + .wavo-switch-track { background: var(--social-cyan); border-color: transparent; }
+.wavo-activity-toggle input:checked + .wavo-switch-track::after { transform: translateX(14px); background: #08252c; }
+.wavo-activity-toggle input:focus-visible + .wavo-switch-track { outline: 2px solid var(--social-cyan); outline-offset: 4px; }
 
-.wavo-social-people,
-.wavo-social-chat {
-  min-width: 0;
-  height: clamp(460px, 68dvh, 760px);
-}
+.wavo-social-features { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; margin-bottom: 24px; }
+.wavo-social-feature { --feature-color: var(--social-cyan); min-width: 0; padding: 20px 22px; border: 1px solid color-mix(in srgb, var(--feature-color) 16%, var(--social-line)); border-radius: 16px; background: linear-gradient(115deg, color-mix(in srgb, var(--feature-color) 8%, var(--bg-elevated)), var(--bg-elevated)); }
+.wavo-collaborative-panel { --feature-color: var(--social-violet); }
+.wavo-feature-header { display: flex; align-items: center; gap: 11px; height: 38px; margin-bottom: 14px; }
+.wavo-feature-icon { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: color-mix(in srgb, var(--feature-color) 12%, transparent); color: var(--feature-color); }
+.wavo-feature-kicker { color: var(--text-secondary); font-size: 9px; font-weight: 600; letter-spacing: .1em; }
+.wavo-social-feature h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.025em; }
+.wavo-social-feature p { line-height: 1.6; }
+.wavo-feature-body > div > p { margin: 4px 0 14px; font-size: 12px; color: var(--text-secondary); }
+.wavo-feature-action { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 34px; padding: 8px 12px; border-radius: 8px; background: var(--feature-color); color: #10141d; font-size: 11px; line-height: 1.4; font-weight: 700; transition: filter .15s, transform .15s; }
+.wavo-feature-action:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+.wavo-feature-action:disabled { opacity: .4; cursor: not-allowed; }
+.wavo-feature-wave { display: flex; align-items: center; gap: 4px; margin-left: auto; padding-left: 8px; height: 34px; color: var(--social-cyan); opacity: .55; }
+.wavo-feature-wave i { width: 3px; height: 10px; border-radius: 5px; background: currentColor; }
+.wavo-feature-wave i:nth-child(2n) { height: 20px; opacity: .65; }
+.wavo-feature-wave i:nth-child(3n) { height: 30px; }
+.wavo-feature-wave i:nth-child(5) { height: 36px; }
+.wavo-playlist-art { position: relative; width: 56px; height: 38px; flex-shrink: 0; margin-left: auto; }
+.wavo-playlist-art i { position: absolute; top: 3px; right: 0; width: 29px; height: 32px; border: 1px solid color-mix(in srgb, var(--social-violet) 45%, transparent); border-radius: 6px; background: var(--bg-panel); transform: rotate(15deg); }
+.wavo-playlist-art i:nth-child(2) { right: 10px; transform: rotate(-2deg); background: color-mix(in srgb, var(--social-violet) 16%, var(--bg-panel)); }
+.wavo-playlist-art i:nth-child(3) { right: 20px; transform: rotate(-16deg); background: color-mix(in srgb, var(--social-violet) 30%, var(--bg-panel)); }
+.wavo-collaborative-create { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wavo-collaborative-create .wavo-playlist-select { height: 36px; flex: 1; min-width: 140px; max-width: 260px; padding-inline: 11px; border: 1px solid var(--social-line); border-radius: 9px; color: var(--text-secondary); background: var(--bg-primary); font-size: 11px; }
+.wavo-collaborative-create .wavo-playlist-select[aria-expanded="true"] { border-color: var(--social-violet); background: color-mix(in srgb, var(--social-violet) 7%, var(--bg-primary)); }
+.wavo-playlist-select > span > span:first-child:has(svg) { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--social-violet); background: color-mix(in srgb, var(--social-violet) 12%, transparent); }
+.wavo-playlist-select-menu { max-height: min(300px, 45dvh); overflow-y: auto; padding: 6px; border: 1px solid color-mix(in srgb, #ad96ef 22%, var(--border-primary)); border-radius: 12px; background: var(--bg-elevated); box-shadow: 0 16px 48px #0005, 0 3px 10px #0002; }
+.wavo-playlist-select-menu [role="option"] { min-height: 42px; padding: 7px 9px; border-radius: 8px; font-size: 12px; }
+.wavo-playlist-select-menu [role="option"] > span > span:first-child { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 7px; color: #ad96ef; background: color-mix(in srgb, #ad96ef 12%, transparent); }
+.wavo-playlist-select-menu [role="option"]:hover, .wavo-playlist-select-menu [role="option"][aria-selected="true"] { background: color-mix(in srgb, #ad96ef 13%, transparent); color: var(--text-primary); }
+.wavo-playlist-select-menu [aria-selected="true"] > svg { color: #ad96ef; }
+.wavo-playlist-select-empty { padding: 20px 12px; text-align: center; }
+.wavo-playlist-select-empty > span { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 12px; border-radius: 14px; background: color-mix(in srgb, #ad96ef 12%, transparent); color: #ad96ef; }
+.wavo-playlist-select-empty strong { display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.wavo-playlist-select-empty p { margin: 7px 0 0; font-size: 11px; line-height: 1.7; color: var(--text-secondary); }
+.wavo-listening-panel { max-height: min(560px, 65dvh); overflow-y: auto; overscroll-behavior: contain; }
+.wavo-listening-grid { grid-template-columns: minmax(0, 1fr); }
+.wavo-listening-grid > * { min-width: 0; }
 
-.wavo-social-people {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+.wavo-social-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 430px; height: clamp(430px, calc(100dvh - 490px), 660px); border: 1px solid var(--social-line); border-radius: 16px; overflow: hidden; background: var(--bg-elevated); }
+.wavo-social-people, .wavo-social-chat { min-width: 0; min-height: 0; }
+.wavo-social-people { overflow-y: auto; overscroll-behavior: contain; padding: 21px 16px; border-right: 1px solid var(--social-line); background: color-mix(in srgb, var(--bg-primary) 38%, var(--bg-elevated)); }
+.wavo-conversations-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+.wavo-conversations-heading h2 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: -.025em; }
+.wavo-conversations-heading > span { display: grid; place-items: center; min-width: 20px; height: 20px; border-radius: 6px; background: var(--bg-panel); font-size: 10px; color: var(--text-secondary); }
+.wavo-conversations-heading > svg { margin-left: auto; color: var(--text-tertiary); }
+.wavo-friend-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--social-line); border-radius: 9px; padding: 10px; color: var(--text-secondary); background: var(--bg-primary); transition: border-color .15s; }
+.wavo-friend-search:focus-within { border-color: var(--social-cyan); }
+.wavo-friend-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; font-size: 12px; color: var(--text-primary); }
+.wavo-friend-search input::placeholder { color: var(--text-tertiary); }
+.wavo-social-people section > h2 { font-size: 10px; color: var(--text-secondary); }
+.wavo-people-empty { padding: 26px 8px; text-align: center; }
+.wavo-people-empty > span { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 14px; border: 1px dashed var(--border-white-alpha-33); border-radius: 15px; color: var(--text-secondary); }
+.wavo-people-empty h3 { margin: 0 0 7px; font-size: 12px; font-weight: 550; }
+.wavo-people-empty p { max-width: 200px; margin: auto; font-size: 11px; line-height: 1.8; color: var(--text-secondary); }
+.wavo-friends-skeleton { display: grid; gap: 9px; }
+.wavo-friends-skeleton span { display: block; height: 48px; border-radius: 9px; background: var(--bg-panel); animation: wavo-social-pulse 1.4s ease-in-out infinite alternate; }
+.wavo-friends-skeleton span:nth-child(2) { opacity: .65; }
+.wavo-friends-skeleton span:nth-child(3) { opacity: .3; }
+@keyframes wavo-social-pulse { to { opacity: .35; } }
+.wavo-social-avatar { background: color-mix(in srgb, var(--social-violet) 15%, var(--bg-panel)); color: var(--social-violet); border: 1px solid color-mix(in srgb, var(--social-violet) 15%, transparent); }
+.wavo-friend-row[aria-pressed="true"] { background: color-mix(in srgb, var(--social-cyan) 9%, transparent); border-color: color-mix(in srgb, var(--social-cyan) 22%, transparent); }
+.wavo-friend-presence { display: flex; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: var(--text-secondary); }
+.wavo-friend-presence.is-listening { color: var(--social-cyan); }
+.wavo-friend-presence svg { flex-shrink: 0; }
+.wavo-social-chat { background: var(--bg-elevated); }
+.wavo-social-messages { min-height: 80px; overscroll-behavior: contain; }
+.wavo-chat-composer { background: color-mix(in srgb, var(--bg-primary) 35%, transparent); }
+.wavo-social-attachment { max-height: 210px; overflow-y: auto; }
+.wavo-social-back { display: none; }
+.wavo-chat-welcome { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.wavo-welcome-topline { display: flex; align-items: center; gap: 8px; padding: 21px 24px; color: var(--text-secondary); font-size: 12px; border-bottom: 1px solid var(--social-line); }
+.wavo-welcome-content { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding: 18px 24px 24px; text-align: center; }
+.wavo-friends-art { position: relative; display: grid; place-items: center; width: 210px; height: 136px; margin-bottom: 14px; }
+.wavo-art-orbit { position: absolute; width: 172px; height: 108px; border: 1px solid var(--social-line); border-radius: 50%; transform: rotate(-25deg); }
+.wavo-art-orbit::after { content: ''; position: absolute; inset: -17px; border: 1px dashed var(--social-line); border-radius: 50%; }
+.wavo-art-disc { position: relative; display: grid; place-items: center; width: 100px; height: 100px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--social-cyan) 18%, var(--bg-panel)); background: repeating-radial-gradient(circle, transparent 0 5px, var(--social-line) 6px, transparent 7px), var(--bg-primary); box-shadow: 0 10px 40px #0002; }
+.wavo-art-disc > div { display: grid; place-items: center; width: 66px; height: 66px; border: 1px solid color-mix(in srgb, var(--social-cyan) 20%, transparent); border-radius: 50%; color: var(--social-cyan); background: color-mix(in srgb, var(--social-cyan) 13%, var(--bg-elevated)); }
+.wavo-art-note, .wavo-art-chat { position: absolute; z-index: 1; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; border: 1px solid color-mix(in srgb, var(--social-violet) 28%, transparent); background: color-mix(in srgb, var(--social-violet) 12%, var(--bg-elevated)); color: var(--social-violet); }
+.wavo-art-note { left: 12px; top: 12px; transform: rotate(-12deg); }
+.wavo-art-chat { right: 9px; bottom: 10px; transform: rotate(10deg); }
+.wavo-art-spark { position: absolute; right: 27px; top: 3px; font-size: 20px; color: var(--social-cyan); }
+.wavo-welcome-eyebrow { color: var(--text-secondary); font-size: 9px; font-weight: 600; letter-spacing: .17em; }
+.wavo-welcome-content h2 { max-width: 360px; margin: 10px 0; font-size: clamp(20px, 2.2cqw, 28px); font-weight: 650; line-height: 1.25; letter-spacing: -.035em; text-wrap: balance; }
+.wavo-welcome-content p { max-width: 330px; margin: 0 0 20px; color: var(--text-secondary); font-size: 12px; line-height: 1.8; text-wrap: balance; }
+.wavo-find-friends { display: inline-flex; align-items: center; gap: 9px; padding: 10px 15px; border: 1px solid var(--border-white-alpha-33); border-radius: 9px; color: var(--text-primary); background: var(--bg-panel); font-size: 12px; font-weight: 600; transition: border-color .15s, background .15s; }
+.wavo-find-friends:hover { border-color: var(--social-cyan); background: color-mix(in srgb, var(--social-cyan) 9%, var(--bg-panel)); }
+.wavo-welcome-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; padding: 17px 20px; border-top: 1px solid var(--social-line); }
+.wavo-welcome-footer > span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 10px; }
+.wavo-friends-page button:focus-visible, .wavo-friends-page select:focus-visible { outline: 2px solid var(--social-cyan); outline-offset: 3px; }
 
-.wavo-social-messages {
-  min-height: 80px;
-  overscroll-behavior: contain;
+@container (max-width: 960px) {
+  .wavo-social-layout { grid-template-columns: 250px minmax(0, 1fr); }
+  .wavo-feature-kicker { font-size: 8px; letter-spacing: .06em; }
+  .wavo-feature-wave { gap: 3px; }
+  .wavo-welcome-footer { gap: 12px; }
 }
-
-.wavo-social-attachment {
-  max-height: 210px;
-  overflow-y: auto;
+@container (max-width: 720px) {
+  .wavo-friends-header { align-items: flex-start; }
+  .wavo-activity-toggle small { display: none; }
+  .wavo-activity-toggle { gap: 8px; padding: 10px; }
+  .wavo-activity-toggle > svg { display: none; }
+  .wavo-social-features { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .wavo-social-feature { padding: 16px 18px; }
+  .wavo-feature-header { margin-bottom: 10px; }
+  .wavo-feature-kicker { font-size: 9px; }
+  .wavo-social-layout { grid-template-columns: 220px minmax(0, 1fr); height: 560px; }
+  .wavo-welcome-footer > span { font-size: 9px; }
 }
-
-.wavo-social-back {
-  display: none;
-}
-
-.wavo-listening-grid {
-  grid-template-columns: minmax(0, 1.15fr) minmax(240px, 1fr);
-}
-
-.wavo-listening-panel {
-  max-height: clamp(180px, 36dvh, 360px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.wavo-listening-grid > * {
-  min-width: 0;
-}
-
-@container (max-width: 760px) {
-  .wavo-social-layout {
-    grid-template-columns: minmax(175px, 31%) minmax(0, 1fr);
-  }
-}
-
-@container (max-width: 640px) {
-  .wavo-listening-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @container (max-width: 520px) {
-  .wavo-social-layout {
-    display: block;
-  }
-
+  .wavo-friends-header { flex-wrap: wrap; gap: 18px; }
+  .wavo-friends-header h1 { font-size: 34px; }
+  .wavo-activity-toggle { width: 100%; }
+  .wavo-activity-toggle > span:first-of-type { flex: 1; }
+  .wavo-activity-toggle small { display: block; }
+  .wavo-social-layout { display: block; height: 480px; }
+  .wavo-social-people, .wavo-social-chat { height: 100%; }
+  .wavo-social-people { border-right: 0; }
   .wavo-social-layout:not([data-chat-open="true"]) .wavo-social-chat,
-  .wavo-social-layout[data-chat-open="true"] .wavo-social-people {
-    display: none;
-  }
-
-  .wavo-social-back {
-    display: inline-flex;
-  }
-
-  .wavo-social-close {
-    display: none;
-  }
+  .wavo-social-layout[data-chat-open="true"] .wavo-social-people { display: none; }
+  .wavo-social-back { display: inline-flex; }
+  .wavo-social-close { display: none; }
+  .wavo-people-empty { padding-top: 40px; }
 }
-
-@media (max-width: 760px) {
-  .wavo-friends-page {
-    padding: 18px 14px;
-  }
+@media (max-width: 760px) { .wavo-friends-page { padding: 24px 16px; } }
+@media (prefers-reduced-motion: reduce) {
+  .wavo-friends-page *, .wavo-friends-page *::after { animation: none; transition: none; }
 }

@@ -8,7 +8,7 @@ import { clampBlockConfig, useCustomizationStore } from "@/features/settings/sto
 import { builtInThemes, parseThemePack, useExtensionsStore } from "@/features/extensions/store/extensionsStore";
 import { getFriendVisibility } from "./friendActivity";
 import { applyRemoteSmartRule, listSmartRules } from "./smartPlaylists";
-import { getBrowserLocale, getStoredLocale, storeLocale, type Locale } from "@/languages/locale";
+import { getStoredLocale, storeLocale, type Locale } from "@/languages/locale";
 
 export type CloudKind = "like" | "album" | "artist" | "catalog_playlist" | "playlist" | "history" | "queue" | "settings" | "theme" | "smart_rule" | "privacy";
 type CloudChange = { kind: CloudKind; id: string; payload: unknown; deleted: boolean };
@@ -135,7 +135,7 @@ export function restoreLocalProfile(userId: string) {
   usePlayerStore.setState(safeSettings(object(profile?.settings) ?? defaults as unknown as Record<string, unknown>));
   const locale = profile?.settings && object(profile.settings)?.locale;
   if (["en", "de", "ru", "uk", "es"].includes(locale as string)) storeLocale(locale as Locale);
-  else storeLocale(getBrowserLocale());
+  else storeLocale("en");
   if (profile?.theme) applyThemeSnapshot(profile.theme);
   else {
     const c = useCustomizationStore.getInitialState();

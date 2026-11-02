@@ -1,13 +1,14 @@
 import { HashRouter } from "react-router-dom";
 import { useEffect } from "react";
 import { ThemeProvider } from "next-themes";
-import { ToastProvider, AppleEmojiProvider, RootErrorBoundary, GlobalTooltip, WindowAnimationContainer } from "@/shared/ui";
+import { ToastProvider, AppleEmojiProvider, RootErrorBoundary, GlobalTooltip, WindowAnimationContainer, showToast } from "@/shared/ui";
 import { useWindowDrag } from "@/shared/hooks";
 import { useAppIconSync } from "@/features/player";
-import { I18nProvider } from "@/languages";
+import { I18nProvider, useTranslation } from "@/languages";
 import { AuthLock } from "@/features/auth";
 import { CoverSwRegistrar } from "@/features/covers";
 import { usePresenceSync } from "@/shared/presence";
+import { useDiscordPresence } from "@/features/discord/useDiscordPresence";
 import { useThemeCustomizationSync } from "@/features/settings";
 import { useTouchBarSync } from "@/features/touchbar";
 import { useExtensionsSync } from "@/features/extensions";
@@ -20,6 +21,7 @@ import { ConnectivityWall } from "@/features/connectivity";
 import { getAuthSession } from "@/shared/api";
 import "./globals.css";
 import { useDownloadStore } from "@/features/downloads/downloadStore";
+import { startAutomaticDownloads } from "@/features/downloads/automaticDownloads";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { CloudSync, restoreLocalProfile, setActiveCloudSync } from "@/features/cloud/cloudSync";
 import { WavoConnect, setActiveConnect } from "@/features/cloud/wavoConnect";
@@ -33,6 +35,7 @@ function AppIconSync() {
 
 function PresenceSync() {
   usePresenceSync();
+  useDiscordPresence();
   return null;
 }
 
@@ -53,7 +56,19 @@ function OverlaySync() {
 }
 
 function OfflineDownloadsSync() {
-  useEffect(() => { void useDownloadStore.getState().hydrate(); }, []);
+  const { t } = useTranslation();
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void useDownloadStore.getState().hydrate().then(() => {
+      if (!disposed) stop = startAutomaticDownloads((count) => {
+        showToast(t("downloads.auto_failed"), "error", { description: t("downloads.auto_retry", { count }), id: "automatic-download-failed" });
+      });
+    }).catch(() => {
+      if (!disposed) showToast(t("downloads.failed"), "error");
+    });
+    return () => { disposed = true; stop?.(); };
+  }, [t]);
   return null;
 }
 
@@ -136,11 +151,11 @@ export default function App() {
         <PresenceSync />
         <TouchBarSync />
         <OverlaySync />
-        <OfflineDownloadsSync />
         {!isOverlay && <CloudSyncBridge />}
         <AppleEmojiProvider>
           <I18nProvider>
             <ToastProvider>
+              <OfflineDownloadsSync />
               <UpdateToastBridge />
               <RootErrorBoundary>
                 <WindowAnimationContainer>

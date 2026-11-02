@@ -10,25 +10,27 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const status = useAuthStore((state) => state.status);
   const initialize = useAuthStore((state) => state.initialize);
+  const skipLogin = import.meta.env.DEV && import.meta.env.VITE_DEV_SKIP_LOGIN !== "false";
+  const canEnterApp = status === "authenticated" || skipLogin;
 
   useEffect(() => {
     void initialize();
   }, [initialize]);
 
   useEffect(() => {
-    if (status === "anonymous" && pathname !== "/login") {
+    if (status === "anonymous" && !skipLogin && pathname !== "/login") {
       navigate("/login", { replace: true });
     }
-    if (status === "authenticated" && pathname === "/login") {
+    if (canEnterApp && pathname === "/login") {
       const token = takePendingReleaseToken();
       navigate(token ? `/uploads?claim=${encodeURIComponent(token)}` : "/", { replace: true });
     }
-  }, [pathname, navigate, status]);
+  }, [pathname, navigate, status, skipLogin, canEnterApp]);
 
   if (
-    status === "initializing" ||
-    (status === "anonymous" && pathname !== "/login") ||
-    (status === "authenticated" && pathname === "/login")
+    (status === "initializing" && !skipLogin) ||
+    (status === "anonymous" && !skipLogin && pathname !== "/login") ||
+    (canEnterApp && pathname === "/login")
   ) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-bg-primary">
@@ -37,7 +39,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return pathname === "/login" ? children : <><ListeningSync /><AppFrame>{children}</AppFrame></>;
+  return pathname === "/login" ? children : <>{status === "authenticated" && <ListeningSync />}<AppFrame>{children}</AppFrame></>;
 }
 
 export default AuthLock;

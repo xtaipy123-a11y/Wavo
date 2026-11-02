@@ -20,7 +20,7 @@ import {
   loadPersistedWallpaper,
   DEFAULT_GLASS_CONFIG,
 } from "@/features/settings";
-import { useShortcutsStore, matchesShortcut } from "@/features/shortcuts";
+import { useShortcutsStore, matchesShortcut, getShortcutActivationScope } from "@/features/shortcuts";
 
 const OVERLAY_CARD_TRANSITION = {
   duration: 0.08,
@@ -166,12 +166,43 @@ export function OverlayPlayer() {
     });
   }, []);
 
+  useEffect(() => {
+    const bridge = window.wavoElectron;
+    let active = true;
+    const unsubscribeSettings = bridge?.onShortcutSettingsChanged?.((settings) => useShortcutsStore.setState(settings));
+    const unsubscribeRegistration = bridge?.onShortcutRegistration?.((result) => useShortcutsStore.getState().setNativeRegistration(result));
+    void bridge?.getShortcutSettings?.().then(({ settings, registration }) => {
+      if (!active) return;
+      if (settings) useShortcutsStore.setState(settings);
+      useShortcutsStore.getState().setNativeRegistration(registration);
+    }).catch(() => {});
+    return () => { active = false; unsubscribeSettings?.(); unsubscribeRegistration?.(); };
+  }, []);
+
   // Keyboard Shortcuts (Miniplayer mode)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
 
-      const { miniplayer } = useShortcutsStore.getState();
+      const settings = useShortcutsStore.getState();
+      if (settings.isRecording) return;
+      const { miniplayer } = settings;
+      for (const scope of ["global", "mainApp", "miniplayer"] as const) {
+        for (const [action, shortcut] of Object.entries(settings[scope])) {
+          if (settings.nativeRegistration.registered.includes(`${scope}-${action}`) && matchesShortcut(e, shortcut)) {
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+      for (const action of ["toggleOverlay", "quickLikeSong"] as const) {
+        if (getShortcutActivationScope(settings, "global", action) === "app" && matchesShortcut(e, settings.global[action])) {
+          e.preventDefault();
+          if (action === "toggleOverlay") void window.wavoElectron?.toggleOverlay?.();
+          else sendAction({ type: "like" });
+          return;
+        }
+      }
 
       // Sound up / down shortcuts
       if (matchesShortcut(e, miniplayer.volumeUp)) {

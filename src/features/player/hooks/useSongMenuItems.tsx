@@ -76,7 +76,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
 
     const offlineItem: DropdownMenuItem = {
       id: downloaded ? "remove-download" : "download-track",
-      label: downloadStatus === "downloading"
+      label: downloadStatus === "downloading" || downloadStatus === "queued"
         ? (locale === "de" ? "Download abbrechen" : "Cancel download")
         : downloaded
           ? (locale === "de" ? "Download entfernen" : "Remove download")
@@ -86,7 +86,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
       onClick: async () => {
         if (!id) return;
         const store = useDownloadStore.getState();
-        if (downloadStatus === "downloading") { store.cancel(id); return; }
+        if (downloadStatus === "downloading" || downloadStatus === "queued") { store.cancel(id); return; }
         try {
           if (downloaded) {
             await store.remove(id);

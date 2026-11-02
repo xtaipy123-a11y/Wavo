@@ -50,6 +50,7 @@ const TAB_GROUPS: { labelKey: "preferences" | "application"; ids: TabId[] }[] = 
 
 const SETTING_ITEMS: { tabId: TabId; titleKey: string; descKey?: string }[] = [
   // Playback
+  { tabId: "Playback", titleKey: "settings.discord_presence.title", descKey: "settings.discord_presence.description" },
   { tabId: "Playback", titleKey: "settings.autoplay_similar.title", descKey: "settings.autoplay_similar.description" },
   { tabId: "Playback", titleKey: "settings.track_double_click.title", descKey: "settings.track_double_click.description" },
   { tabId: "Playback", titleKey: "settings.default_playback_context.title", descKey: "settings.default_playback_context.description" },
@@ -89,6 +90,8 @@ const SETTING_ITEMS: { tabId: TabId; titleKey: string; descKey?: string }[] = [
   { tabId: "Extensions", titleKey: "settings.extensions.ambient_glow", descKey: "settings.extensions.ambient_glow_desc" },
 
   // Audio
+  { tabId: "Audio", titleKey: "settings.offline_downloads.favorites", descKey: "settings.offline_downloads.favorites_description" },
+  { tabId: "Audio", titleKey: "settings.offline_downloads.playlists", descKey: "settings.offline_downloads.playlists_description" },
   { tabId: "Audio", titleKey: "settings.audio.title", descKey: "settings.audio.description" },
   { tabId: "Audio", titleKey: "settings.connection.checks_title" },
 

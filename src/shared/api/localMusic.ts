@@ -6,6 +6,7 @@ import type {
   Track,
 } from "../contracts";
 import { getAuthSession } from "./auth-session";
+import { getFavoritesOwnerId } from "./favoritesIdentity";
 
 type LikedEntry = { track: Track; likedAt: string };
 type CollectionType = "albums" | "artists" | "playlists";
@@ -16,7 +17,8 @@ function changed(kind: "like" | "album" | "artist" | "catalog_playlist" | "histo
 }
 
 function storageKey(kind: "likes" | "history" | CollectionType): string | null {
-  const userId = getAuthSession()?.user?.id;
+  const sessionUserId = getAuthSession()?.user?.id;
+  const userId = kind === "likes" ? getFavoritesOwnerId(sessionUserId) : sessionUserId;
   return userId ? `wavo_local_${kind}_${userId}` : null;
 }
 

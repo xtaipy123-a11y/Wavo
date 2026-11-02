@@ -23,6 +23,7 @@ export async function setAudioCacheLimitBytes(bytes: number): Promise<void> {
 const PRESERVED_STORAGE_KEYS = new Set([
   "wavo_cached_user",
   "wavo_locale",
+  "wavo_discord_settings_v1",
   "theme",
 ]);
 

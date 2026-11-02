@@ -34,6 +34,7 @@ export interface SongCardProps {
   onNavigate?: () => void;
   compact?: boolean;
   icon?: React.ReactNode;
+  actions?: React.ReactNode;
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
@@ -62,6 +63,7 @@ function SongCard({
   onNavigate,
   compact = false,
   icon,
+  actions,
   showReorderHandle,
   onGrabStart,
 }: SongCardProps) {
@@ -134,6 +136,7 @@ function SongCard({
       }}
       onContextMenu={onContextMenu}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (!onPlay) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -248,6 +251,7 @@ function SongCard({
             {duration}
           </span>
         )}
+        {actions}
         {menuItems && menuItems.length > 0 && (
           <DropdownMenu
             trigger={
