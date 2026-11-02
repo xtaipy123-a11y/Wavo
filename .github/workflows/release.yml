@@ -1,6 +1,7 @@
 name: Release Wavo for Windows
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -13,6 +14,26 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check release version and tag
+        id: release
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $tag -ne $env:GITHUB_REF_NAME) {
+            throw "Tag and package.json version do not match"
+          }
+          $remoteTags = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          if ($LASTEXITCODE -ne 0) { throw "Could not check the release tag" }
+          if ($remoteTags.Count -gt 0) {
+            $peeled = @($remoteTags | Where-Object { $_.EndsWith('^{}') })
+            $tagRef = if ($peeled.Count -gt 0) { $peeled[0] } else { $remoteTags[0] }
+            $tagCommit = ($tagRef -split '\s+')[0]
+            if ($tagCommit -ne $env:GITHUB_SHA) {
+              throw "$tag already points to another commit. Select that tag to rerun its release, or bump package.json for a new release."
+            }
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
       - uses: pnpm/action-setup@v4
         with:
           version: 12.14.0
@@ -21,11 +42,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Check release version
-        shell: pwsh
-        run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag and package.json version do not match" }
       - name: Build app and Windows installer
         run: pnpm run release:win
         env:
@@ -36,6 +52,8 @@ jobs:
       - name: Publish installer and update metadata
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           body_path: RELEASE_NOTES.md
           files: |
             release/Wavo-Setup-*.exe
