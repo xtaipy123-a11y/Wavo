@@ -5,10 +5,15 @@ import { playerEngine } from "../engine/playerEngine";
 import { useTranslation } from "@/languages";
 import { ToggleSwitch } from "@/shared/ui";
 import { SparklesFill } from "@mingcute/react";
+import { LuGauge } from "react-icons/lu";
+import { MenuSection } from "./MenuSection";
 
 export interface SpeedPitchPickerProps {
   className?: string;
   onClose?: () => void;
+  collapsible?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
 }
 
 interface SliderRowProps {
@@ -128,7 +133,7 @@ function SliderRow({
   const isActive = (isHovered || isDragging) && !disabled;
 
   return (
-    <div className={`flex flex-col gap-[6px] ${disabled ? "opacity-45" : ""}`}>
+    <div className={`flex flex-col gap-[4px] ${disabled ? "opacity-45" : ""}`}>
       <div className="flex items-center justify-between text-[12px]">
         <span className="font-medium text-text-primary select-none flex items-center gap-[6px]">
           {label}
@@ -225,6 +230,9 @@ function SliderRow({
 
 export const SpeedPitchPicker = memo(function SpeedPitchPicker({
   className = "",
+  collapsible = false,
+  expanded = false,
+  onToggle,
 }: SpeedPitchPickerProps) {
   const { t } = useTranslation();
   const player = usePlayerState();
@@ -271,13 +279,26 @@ export const SpeedPitchPicker = memo(function SpeedPitchPicker({
     { label: "x1.35", rate: 1.35, title: t("player.preset_nightcore") },
   ];
 
-  return (
-    <div
-      className={`flex flex-col gap-[14px] select-none text-text-primary ${className}`}
-      onClick={(e) => e.stopPropagation()}
-    >
+  const summary = (
+    <span className="flex items-center gap-[5px] tabular-nums">
+      <span>
+        x{playbackRate.toFixed(2)}
+        <span className="px-1 text-text-tertiary">·</span>
+        {pitchSemitones > 0
+          ? `+${pitchSemitones.toFixed(1)}`
+          : pitchSemitones.toFixed(1)}{" "}
+        st
+      </span>
+      {isReverbEnabled && (
+        <SparklesFill size={11} className="shrink-0 text-amber-400" />
+      )}
+    </span>
+  );
+
+  const content = (
+    <div className="flex flex-col gap-[10px] select-none text-text-primary">
       {/* Quick Presets */}
-      <div className="grid grid-cols-6 gap-[4px]">
+      <div className="grid grid-cols-6 gap-[3px]">
         {presets.map((preset) => {
           const isActive = Math.abs(playbackRate - preset.rate) < 0.02;
           return (
@@ -287,7 +308,7 @@ export const SpeedPitchPicker = memo(function SpeedPitchPicker({
               title={preset.title}
               whileTap={{ scale: 0.94 }}
               onClick={() => handlePresetClick(preset.rate)}
-              className={`relative flex h-[26px] items-center justify-center rounded-md text-[11px] font-semibold transition-colors duration-150 cursor-pointer border-0 ${
+              className={`relative flex h-[24px] items-center justify-center rounded-md text-[11px] font-semibold transition-colors duration-150 cursor-pointer border-0 ${
                 isActive
                   ? "text-bg-primary"
                   : "bg-white/[0.04] text-text-secondary hover:bg-white/[0.08] hover:text-text-primary"
@@ -339,7 +360,7 @@ export const SpeedPitchPicker = memo(function SpeedPitchPicker({
       />
 
       {/* Options (without separator above) */}
-      <div className="flex flex-col gap-[12px] pt-[2px]">
+      <div className="flex flex-col gap-[9px] pt-[1px]">
         {/* Link speed to pitch toggle */}
         <div className="flex items-center justify-between gap-[8px]">
           <div className="flex flex-col">
@@ -432,6 +453,30 @@ export const SpeedPitchPicker = memo(function SpeedPitchPicker({
           </AnimatePresence>
         </div>
       </div>
+    </div>
+  );
+
+  if (collapsible) {
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        <MenuSection
+          icon={
+            <LuGauge size={14} className="text-text-secondary" aria-hidden="true" />
+          }
+          label={t("player.speed_pitch")}
+          summary={summary}
+          expanded={expanded}
+          onToggle={onToggle ?? (() => {})}
+        >
+          <div className={className}>{content}</div>
+        </MenuSection>
+      </div>
+    );
+  }
+
+  return (
+    <div className={className} onClick={(e) => e.stopPropagation()}>
+      {content}
     </div>
   );
 });

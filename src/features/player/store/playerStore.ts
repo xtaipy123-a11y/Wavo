@@ -49,6 +49,7 @@ export interface SessionState {
   volume: number;
   repeat: RepeatMode;
   shuffle: boolean;
+  smartShuffle: boolean;
   audioQuality: AudioQuality;
   miniPlayerStyle: MiniPlayerStyle;
   accentVariant: AccentVariant;
@@ -100,6 +101,7 @@ export interface PlayerStore extends PlayerState {
   setPlaybackMode: (mode: "hls" | "mp3" | null) => void;
   setRepeat: (mode: RepeatMode) => void;
   setShuffle: (shuffle: boolean) => void;
+  setSmartShuffle: (smartShuffle: boolean) => void;
   setVolume: (volume: number) => void;
   setCurrentTrack: (track: Track | null, index: number) => void;
   setQueue: (queue: Track[]) => void;
@@ -149,6 +151,7 @@ export const usePlayerStore = create<PlayerStore>()(
       volume: 1,
       repeat: "off",
       shuffle: false,
+      smartShuffle: false,
       audioQuality: "high",
       miniPlayerStyle: "default",
       accentVariant: "default",
@@ -176,6 +179,7 @@ export const usePlayerStore = create<PlayerStore>()(
       setPlaybackMode: (playbackMode) => set({ playbackMode }),
       setRepeat: (repeat) => set({ repeat }),
       setShuffle: (shuffle) => set({ shuffle }),
+      setSmartShuffle: (smartShuffle) => set({ smartShuffle }),
       setVolume: (volume) => set({ volume }),
       setCurrentTrack: (currentTrack, currentIndex) => {
         const prev = get().currentTrack;
@@ -269,6 +273,9 @@ export const usePlayerStore = create<PlayerStore>()(
           state.accentVariant = "default";
         }
         if (state) {
+          if (typeof state.smartShuffle !== "boolean") {
+            state.smartShuffle = false;
+          }
           if (typeof state.playbackRate !== "number" || isNaN(state.playbackRate)) {
             state.playbackRate = 1;
           }
@@ -310,6 +317,7 @@ export const usePlayerStore = create<PlayerStore>()(
           : {}),
         repeat: state.repeat,
         shuffle: state.shuffle,
+        smartShuffle: state.smartShuffle,
         volume: state.volume,
         audioQuality: state.audioQuality,
         miniPlayerStyle: state.miniPlayerStyle,

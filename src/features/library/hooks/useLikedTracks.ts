@@ -144,6 +144,36 @@ export function settleOptimisticLike(trackId: string): void {
   if (override) optimisticOverrides.set(trackId, { ...override, pending: false });
 }
 
+export function getCachedLikedTracks(): Track[] {
+  return buildView(false).data.tracks;
+}
+
+export function getCachedLikedTrackIds(): Set<string> {
+  return new Set(getCachedLikedTracks().map((track) => track.id));
+}
+
+export function getCachedLikedArtistKeys(): Set<string> {
+  const keys = new Set<string>();
+  for (const track of getCachedLikedTracks()) {
+    if (track.artistList?.length) {
+      for (const artist of track.artistList) {
+        const name = artist.name?.trim().toLowerCase();
+        if (name) keys.add(name);
+      }
+      continue;
+    }
+    for (const name of track.artists.split(",")) {
+      const key = name.trim().toLowerCase();
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+export function ensureLikedTracksLoaded(): void {
+  void load();
+}
+
 if (typeof window !== "undefined") {
   const handleRefresh = () => {
     void load(true);

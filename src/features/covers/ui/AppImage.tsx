@@ -22,6 +22,8 @@ export interface ImageProps
   unoptimized?: boolean;
   crossOrigin?: "anonymous" | "use-credentials" | "";
   autoCropLetterbox?: boolean;
+  /** Optional ref to the wrapping element, used for viewport observation. */
+  containerRef?: React.Ref<HTMLDivElement>;
 }
 
 // high-performance image component: smooth fade-in, autocrop letterboxed thumbnails
@@ -42,6 +44,7 @@ export default function AppImage({
   onLoad,
   onError,
   draggable = false,
+  containerRef,
   ...rest
 }: ImageProps) {
   const resolvedSrc = typeof src === "string" ? src : src?.src ?? "";
@@ -145,6 +148,7 @@ export default function AppImage({
 
   return (
     <div
+      ref={containerRef}
       className={`relative overflow-hidden ${fill ? "w-full h-full" : ""}`}
       style={containerStyle}
     >

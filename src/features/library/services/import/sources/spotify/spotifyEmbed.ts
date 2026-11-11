@@ -39,6 +39,12 @@ function findEntity(data: unknown): JsonRecord | undefined {
   return pageProps?.state ? recordAt(pageProps, "state", "data", "entity") : findFirst(data, "entity");
 }
 
+const HIDDEN_FLAGS = ["hidden", "isHidden", "banned", "isBanned", "excluded", "isExcluded", "disabled", "isDisabled"] as const;
+
+function isHiddenListItem(item: JsonRecord): boolean {
+  return HIDDEN_FLAGS.some((key) => item[key] === true);
+}
+
 function mapTrackListItem(
   rawItem: unknown,
   entityType: SpotifyEntityType,
@@ -55,6 +61,7 @@ function mapTrackListItem(
     artists: artists.length > 0 ? artists : ["Spotify Artist"],
     ...(entityType === "album" && title ? { album: title } : {}),
     durationMs: numberValue(item.duration),
+    ...(isHiddenListItem(item) ? { disliked: true } : {}),
   };
 }
 

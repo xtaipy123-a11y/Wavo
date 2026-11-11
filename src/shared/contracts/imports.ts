@@ -35,6 +35,8 @@ export interface ImportedTrack {
   album?: string;
   durationMs?: number;
   coverUrl?: string;
+  // source marks the track as hidden/excluded ("−") for the importing user
+  disliked?: boolean;
 }
 
 export interface ImportedPlaylist {

@@ -28,6 +28,13 @@ import {
 } from "@/features/lyrics";
 import { hasWordTimedLyrics } from "@/features/lyrics/engine/wordTiming";
 import { preloadCoverArt } from "@/features/covers";
+import { getDislikedTrackIds } from "@/features/library/store/dislikeStore";
+import {
+  ensureLikedTracksLoaded,
+  getCachedLikedArtistKeys,
+  getCachedLikedTrackIds,
+} from "@/features/library/hooks/useLikedTracks";
+import { filterDislikedTracks, smartShuffleTracks } from "./smartShuffle";
 import { wavoDb, type CachedLyricsRecord } from "@/shared/storage";
 import { showToast } from "@/shared/ui";
 import { createTranslatorSync, getStoredLocale } from "@/languages";
@@ -448,14 +455,13 @@ class PlayerEngine {
     preserveQueue?: boolean,
   ): Promise<void> {
     const store = usePlayerStore.getState();
-    const nextQueue = this.normalizeQueue(queue ?? [track], track);
-    const nextIndex =
-      queueIndex !== undefined
-        ? queueIndex
-        : Math.max(
-            0,
-            nextQueue.findIndex((item) => item.id === track.id),
-          );
+    const dislikedTrackIds = this.getActiveDislikedTrackIds(context);
+    const queueInput = filterDislikedTracks(queue ?? [track], dislikedTrackIds, track.id);
+    const nextQueue = this.normalizeQueue(queueInput, track);
+    const nextIndex = Math.max(
+      0,
+      nextQueue.findIndex((item) => item.id === track.id),
+    );
 
     this.sessionId += 1;
     const mySession = this.sessionId;
@@ -487,7 +493,7 @@ class PlayerEngine {
       const upcoming = nextQueue.slice(nextIndex + 1);
 
       this.originalUpcomingQueue = [...upcoming];
-      const shuffledUpcoming = shuffleArray(upcoming);
+      const shuffledUpcoming = this.buildShuffledUpcoming(upcoming, context);
 
       finalQueue = [...played, selectedTrackItem, ...shuffledUpcoming];
       finalIndex = nextIndex;
@@ -520,19 +526,23 @@ class PlayerEngine {
   ): Promise<void> {
     if (!tracks || tracks.length === 0) return;
     const store = usePlayerStore.getState();
-    const seedIndex =
+    const dislikedTrackIds = this.getActiveDislikedTrackIds(context);
+    const eligibleTracks = filterDislikedTracks(tracks, dislikedTrackIds);
+    if (eligibleTracks.length === 0) return;
+
+    const preferredTrack =
       startIndex !== undefined && startIndex >= 0 && startIndex < tracks.length
-        ? startIndex
-        : Math.floor(Math.random() * tracks.length);
-    const seedTrack = tracks[seedIndex];
-    const remaining = [
-      ...tracks.slice(0, seedIndex),
-      ...tracks.slice(seedIndex + 1),
-    ];
-    const shuffledRemaining = shuffleArray(remaining);
+        ? tracks[startIndex]
+        : null;
+    const seedTrack =
+      preferredTrack && eligibleTracks.some((track) => track.id === preferredTrack.id)
+        ? preferredTrack
+        : eligibleTracks[Math.floor(Math.random() * eligibleTracks.length)];
+    const remaining = eligibleTracks.filter((track) => track.id !== seedTrack.id);
+    const shuffledRemaining = this.buildShuffledUpcoming(remaining, context);
     const finalQueue = [seedTrack, ...shuffledRemaining];
 
-    this.masterPlaylist = [...tracks];
+    this.masterPlaylist = [...eligibleTracks];
     this.originalUpcomingQueue = [...remaining];
 
     store.setShuffle(true);
@@ -589,7 +599,8 @@ class PlayerEngine {
       if (mySession !== this.sessionId) return;
       const additions = response.items
         .map(toClientTrack)
-        .filter((item) => item.id !== track.id);
+        .filter((item) => item.id !== track.id)
+        .filter((item) => !this.getActiveDislikedTrackIds().has(item.id));
 
       if (additions.length > 0) {
         const latestStore = usePlayerStore.getState();
@@ -598,7 +609,7 @@ class PlayerEngine {
         if (latestStore.shuffle) {
           const upcoming = additions;
           this.originalUpcomingQueue = [...upcoming];
-          const shuffledUpcoming = shuffleArray(upcoming);
+          const shuffledUpcoming = this.buildShuffledUpcoming(upcoming);
           latestStore.setQueue([track, ...shuffledUpcoming]);
         }
         const sample = additions.slice(0, 3).map((t) => `"${t.title}" by ${t.artists || 'Unknown'}`).join(', ');
@@ -808,30 +819,92 @@ class PlayerEngine {
     const store = usePlayerStore.getState();
     if (store.shuffle === enabled) return;
     store.setShuffle(enabled);
+    this.reorderUpcomingForShuffle(enabled);
+  }
 
-    const { queue, currentIndex } = store;
-    if (queue.length > 0 && currentIndex >= 0) {
-      const played = queue.slice(0, currentIndex);
-      const current = queue[currentIndex];
-      const upcoming = queue.slice(currentIndex + 1);
-
-      if (enabled) {
-        this.originalUpcomingQueue = [...upcoming];
-        const shuffledUpcoming = shuffleArray(upcoming);
-        store.setQueue([...played, current, ...shuffledUpcoming]);
-      } else {
-        const referenceList =
-          this.masterPlaylist.length > 0
-            ? this.masterPlaylist
-            : this.originalUpcomingQueue;
-        const unshuffledUpcoming = restoreOriginalRelativeOrder(
-          upcoming,
-          referenceList,
-        );
-        store.setQueue([...played, current, ...unshuffledUpcoming]);
-        this.originalUpcomingQueue = [];
-      }
+  /** Cycles off -> random -> smart -> off. */
+  public cycleShuffle(): void {
+    const store = usePlayerStore.getState();
+    if (!store.shuffle) {
+      store.setSmartShuffle(false);
+      this.setShuffle(true);
+      return;
     }
+    if (!store.smartShuffle) {
+      store.setSmartShuffle(true);
+      this.reorderUpcomingForShuffle(true);
+      const translate = createTranslatorSync(getStoredLocale());
+      showToast(translate("player.shuffle_smart_enabled"), "checkmark", {
+        description: translate("player.shuffle_smart_description"),
+      });
+      return;
+    }
+    store.setSmartShuffle(false);
+    this.setShuffle(false);
+  }
+
+  private reorderUpcomingForShuffle(enabled: boolean): void {
+    const store = usePlayerStore.getState();
+    const { queue, currentIndex } = store;
+    if (queue.length === 0 || currentIndex < 0) return;
+
+    const played = queue.slice(0, currentIndex);
+    const current = queue[currentIndex];
+    const upcoming = queue.slice(currentIndex + 1);
+
+    if (enabled) {
+      const playableUpcoming = filterDislikedTracks(
+        upcoming,
+        this.getActiveDislikedTrackIds(),
+      );
+      this.originalUpcomingQueue = [...playableUpcoming];
+      const shuffledUpcoming = this.buildShuffledUpcoming(playableUpcoming);
+      store.setQueue([...played, current, ...shuffledUpcoming]);
+      return;
+    }
+
+    const referenceList =
+      this.masterPlaylist.length > 0
+        ? this.masterPlaylist
+        : this.originalUpcomingQueue;
+    const unshuffledUpcoming = restoreOriginalRelativeOrder(
+      filterDislikedTracks(upcoming, this.getActiveDislikedTrackIds()),
+      referenceList,
+    );
+    store.setQueue([...played, current, ...unshuffledUpcoming]);
+    this.originalUpcomingQueue = [];
+  }
+
+  private getActiveDislikedTrackIds(context?: string | null): Set<string> {
+    // The disliked-songs management page must be able to preview its entries.
+    const activeContext =
+      context === undefined ? usePlayerStore.getState().playbackContext : context;
+    if (activeContext === "disliked") {
+      return new Set();
+    }
+    return getDislikedTrackIds();
+  }
+
+  private buildSmartShuffledUpcoming(
+    upcoming: Track[],
+    context?: string | null,
+  ): Track[] {
+    ensureLikedTracksLoaded();
+    return smartShuffleTracks(upcoming, {
+      likedTrackIds: getCachedLikedTrackIds(),
+      likedArtistKeys: getCachedLikedArtistKeys(),
+      dislikedTrackIds: this.getActiveDislikedTrackIds(context),
+    });
+  }
+
+  private buildShuffledUpcoming(
+    upcoming: Track[],
+    context?: string | null,
+  ): Track[] {
+    if (usePlayerStore.getState().smartShuffle) {
+      return this.buildSmartShuffledUpcoming(upcoming, context);
+    }
+    return shuffleArray(upcoming);
   }
 
   public seek(positionMs: number, autoPlay: boolean = false): void {
@@ -877,6 +950,7 @@ class PlayerEngine {
 
   public addToQueue(track: Track): void {
     const store = usePlayerStore.getState();
+    if (this.getActiveDislikedTrackIds().has(track.id)) return;
     const newQueue = [...store.queue, track];
     store.setQueue(newQueue);
     if (this.masterPlaylist.length > 0) {
@@ -890,6 +964,7 @@ class PlayerEngine {
 
   public playNext(track: Track): void {
     const store = usePlayerStore.getState();
+    if (this.getActiveDislikedTrackIds().has(track.id)) return;
     const currentQueue = store.queue;
     const currentIndex = store.currentIndex;
 
@@ -925,6 +1000,61 @@ class PlayerEngine {
     usePlayerStore.getState().clearQueue();
     this.masterPlaylist = [];
     this.originalUpcomingQueue = [];
+  }
+
+  /**
+   * Removes a track from the live queue (used by the dislike action). When the
+   * current track is removed, playback continues with the next playable track.
+   */
+  public removeTrackFromQueue(trackId: string): void {
+    const store = usePlayerStore.getState();
+    const removedIndex = store.queue.findIndex((track) => track.id === trackId);
+    if (removedIndex < 0) return;
+
+    const wasCurrent = removedIndex === store.currentIndex;
+    const nextQueue = store.queue.filter((track) => track.id !== trackId);
+    this.masterPlaylist = this.masterPlaylist.filter((track) => track.id !== trackId);
+    this.originalUpcomingQueue = this.originalUpcomingQueue.filter(
+      (track) => track.id !== trackId,
+    );
+
+    if (!wasCurrent) {
+      const nextIndex =
+        removedIndex < store.currentIndex
+          ? store.currentIndex - 1
+          : store.currentIndex;
+      store.setQueue(nextQueue);
+      store.setCurrentTrack(store.currentTrack, nextIndex);
+      return;
+    }
+
+    if (nextQueue.length === 0) {
+      this.stopPlayback();
+      store.setQueue([]);
+      store.setStatus("idle");
+      store.setPosition(0);
+      store.setDuration(0);
+      store.setCurrentTrack(null, -1);
+      return;
+    }
+
+    const nextIndex = Math.min(removedIndex, nextQueue.length - 1);
+    const nextTrack = nextQueue[nextIndex];
+    this.sessionId += 1;
+    const mySession = this.sessionId;
+
+    store.setQueue(nextQueue);
+    store.setCurrentTrack(nextTrack, nextIndex);
+    store.setPosition(0);
+    store.setDuration(nextTrack.durationMs ?? 0);
+    store.setStatus("loading", null);
+
+    if (playerRuntime) {
+      void playerRuntime.loadAndPlay(nextTrack);
+    }
+    if (nextIndex === nextQueue.length - 1) {
+      this.scheduleAppendSimilarTracks(mySession, nextTrack.id);
+    }
   }
 
   public reorderQueue(fromIndex: number, toIndex: number): void {
@@ -1016,8 +1146,19 @@ class PlayerEngine {
     if (queueSize === 0 || store.currentIndex < 0) return null;
     if (isAutoEnd && store.repeat === "one") return store.currentIndex;
 
-    if (store.currentIndex + 1 < queueSize) return store.currentIndex + 1;
-    if (store.repeat === "all" || store.repeat === "one") return 0;
+    const dislikedTrackIds = this.getActiveDislikedTrackIds();
+    const findPlayable = (from: number, end: number): number | null => {
+      for (let index = from; index < end; index++) {
+        if (!dislikedTrackIds.has(store.queue[index].id)) return index;
+      }
+      return null;
+    };
+
+    const nextIndex = findPlayable(store.currentIndex + 1, queueSize);
+    if (nextIndex !== null) return nextIndex;
+    if (store.repeat === "all" || store.repeat === "one") {
+      return findPlayable(0, queueSize);
+    }
     return null;
   }
 
@@ -1030,7 +1171,13 @@ class PlayerEngine {
       this.radioAppendTimeout = null;
     }
     if (usePlayerStore.getState().repeat === "all") return;
-    if (seedTrackId.startsWith("upload:") || usePlayerStore.getState().playbackContext === "downloads" ||
+    const context = usePlayerStore.getState().playbackContext;
+    // Guests must not append radio tracks of their own: the room host owns the
+    // queue, otherwise the follower drifts away at every track boundary.
+    if (context?.startsWith("listening:")) return;
+    // SoundCloud tracks are resolved on the client; the API has no radio for them.
+    if (/^(?:sc:|soundcloud:)/i.test(seedTrackId)) return;
+    if (seedTrackId.startsWith("upload:") || context === "downloads" ||
         (typeof navigator !== "undefined" && navigator.onLine === false)) return;
 
     this.radioAppendTimeout = setTimeout(() => {
@@ -1072,9 +1219,11 @@ class PlayerEngine {
     if (!state.autoplaySimilar || state.repeat === "all") return;
 
     const queuedIds = new Set(state.queue.map((track) => track.id));
+    const dislikedTrackIds = this.getActiveDislikedTrackIds();
     const additions = items
       .map(toClientTrack)
-      .filter((track) => !queuedIds.has(track.id));
+      .filter((track) => !queuedIds.has(track.id))
+      .filter((track) => !dislikedTrackIds.has(track.id));
     if (additions.length === 0) return;
 
     const sample = additions.slice(0, 3).map((t) => `"${t.title}" by ${t.artists || 'Unknown'}`).join(', ');
@@ -1096,11 +1245,20 @@ class PlayerEngine {
   private preloadNextTrack(state: PlayerState): void {
     const queue = state.queue;
     const currentIndex = state.currentIndex;
+    const dislikedTrackIds = this.getActiveDislikedTrackIds();
+    const findPlayable = (from: number, end: number): Track | null => {
+      for (let index = from; index < end; index++) {
+        if (!dislikedTrackIds.has(queue[index].id)) return queue[index];
+      }
+      return null;
+    };
+
     let nextTrack: Track | null = null;
     if (currentIndex >= 0 && currentIndex < queue.length - 1) {
-      nextTrack = queue[currentIndex + 1];
-    } else if (state.repeat === "all" && queue.length > 0) {
-      nextTrack = queue[0];
+      nextTrack = findPlayable(currentIndex + 1, queue.length);
+    }
+    if (!nextTrack && state.repeat === "all" && queue.length > 0) {
+      nextTrack = findPlayable(0, queue.length);
     }
 
     if (!nextTrack) {

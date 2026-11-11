@@ -22,3 +22,4 @@ export {
   recentlyPlayedKeys,
 } from "./hooks/useRecentlyPlayed";
 export { useDailyMixes, type DailyMix } from "./hooks/useDailyMixes";
+export { useRecommendations, type UseRecommendationsOptions } from "./hooks/useRecommendations";

@@ -31,6 +31,40 @@ function artistName(raw: unknown): string | undefined {
   return stringValue(recordAt(artist, "profile")?.name) ?? stringValue(artist?.name);
 }
 
+// Spotify keeps per-user hidden tracks private ("playcontextbans"), but if the
+// payload ever surfaces a hidden/excluded flag we honor it during import.
+const HIDDEN_FLAGS = ["hidden", "isHidden", "banned", "isBanned", "excluded", "isExcluded", "disabled", "isDisabled"] as const;
+
+export function isHiddenPlaylistItem(item: JsonRecord): boolean {
+  const containers = [
+    item,
+    asRecord(item.itemV2),
+    recordAt(item, "itemV2", "data"),
+    asRecord(item.attributes),
+  ];
+  return containers.some((container) =>
+    container ? HIDDEN_FLAGS.some((key) => container[key] === true) : false,
+  );
+}
+
+// Playlist payloads occasionally expose a separate list of per-user bans.
+const BANNED_LIST_KEYS = ["bannedItems", "bannedTracks", "bans", "hiddenItems", "hiddenTracks"] as const;
+
+function collectBannedTrackIds(root: JsonRecord | undefined, into: Set<string>): void {
+  if (!root) return;
+  for (const key of BANNED_LIST_KEYS) {
+    for (const entry of asArray(root[key])) {
+      const record = asRecord(entry);
+      const uri =
+        stringValue(record?.uri) ??
+        stringValue(recordAt(record, "itemV2", "data")?.uri) ??
+        stringValue(recordAt(record, "track")?.uri);
+      const id = uri?.split(":").pop();
+      if (id) into.add(id);
+    }
+  }
+}
+
 export function mapPathfinderItem(item: JsonRecord): ClientImportedTrack | undefined {
   const track = recordAt(item, "itemV2", "data");
   if (!track || track.__typename !== "Track") return undefined;
@@ -53,12 +87,14 @@ export function mapPathfinderItem(item: JsonRecord): ClientImportedTrack | undef
     ...(albumName ? { album: albumName } : {}),
     ...(coverUrl ? { coverUrl } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(isHiddenPlaylistItem(item) ? { disliked: true } : {}),
   };
 }
 
 export async function fetchSpotifyPlaylistTracks(playlistId: string, signal?: AbortSignal): Promise<ClientImportedTrack[]> {
   const session = await getSpotifyGuestSession(signal);
   const tracks: ClientImportedTrack[] = [];
+  const bannedTrackIds = new Set<string>();
   let offset = 0;
   let total = Number.POSITIVE_INFINITY;
   let pageCount = 0;
@@ -72,8 +108,12 @@ export async function fetchSpotifyPlaylistTracks(playlistId: string, signal?: Ab
     }
     if (!response.ok) break;
 
-    const content = recordAt((await response.json()) as unknown, "data", "playlistV2", "content");
+    const data = (await response.json()) as unknown;
+    const playlist = recordAt(data, "data", "playlistV2");
+    const content = recordAt(playlist, "content");
     if (!content) break;
+    collectBannedTrackIds(playlist, bannedTrackIds);
+    collectBannedTrackIds(content, bannedTrackIds);
     const count = numberValue(content.totalCount);
     if (count !== undefined) total = count;
     const items = asArray(content.items).filter(isRecord);
@@ -81,7 +121,9 @@ export async function fetchSpotifyPlaylistTracks(playlistId: string, signal?: Ab
 
     for (const item of items) {
       const track = mapPathfinderItem(item);
-      if (track) tracks.push(track);
+      if (!track) continue;
+      if (bannedTrackIds.has(track.sourceId)) track.disliked = true;
+      tracks.push(track);
     }
     offset += PAGE_LIMIT;
     if (tracks.length >= total) break;

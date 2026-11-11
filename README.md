@@ -1,38 +1,106 @@
-# Wavo Desktop
+<p align="center">
+  <img src="src/assets/logo.png" width="96" height="96" alt="Wavo" />
+</p>
 
-Electron and Vite music player with Supabase Auth.
+<h1 align="center">Wavo</h1>
 
-## Development
+<p align="center"><strong>Your music, all in one place.</strong></p>
 
-```powershell
-corepack pnpm install
-corepack pnpm dev
-```
+<p align="center">
+  <a href="https://github.com/xtaipy123-a11y/Wavo/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/xtaipy123-a11y/Wavo?style=flat-square&color=7c5cff"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-1f6feb?style=flat-square">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=101010">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square"></a>
+</p>
 
-The dev server opens the app without requiring sign-in. Existing sessions are still restored; account and cloud features require a real session. Set `VITE_DEV_SKIP_LOGIN=false` in `.env.local` and restart the dev server to test the normal sign-in flow. Production builds always require sign-in, regardless of this setting.
+Wavo is a modern desktop music player that brings catalog streaming, your own library, synchronized lyrics, offline listening and shared listening together in one app. The current release is **0.156.0**.
 
-In Settings → Shortcuts, each binding can apply only inside its Wavo window or globally on the desktop. Global bindings require a modifier or function key. They pause while recording a replacement, and unavailable combinations are marked in Settings. Existing bindings keep their previous scope until changed.
+---
 
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are read from `.env.local` when Vite starts. Email and password sign-in, sign-up, automatic refresh, and sign-out use Supabase Auth. If email confirmation is enabled in Supabase, new users confirm through the email link and then sign in inside Wavo.
+## What Wavo is
 
-The supplied Next.js `page.tsx` and middleware examples do not run in this Electron/Vite project. `@supabase/ssr` is installed as requested but is not used by the desktop renderer.
+Wavo is built with Electron 44, React 19, TypeScript and Vite. It runs as a native desktop app on Windows, macOS and Linux; Windows is the primary release target. Catalog search and streaming use a built-in YouTube Music integration and SoundCloud. Sign-in, friends, chat, cloud sync and shared listening are powered by Supabase, while your library and playback cache stay on your device.
 
-## Discord Rich Presence
+An Android project (Capacitor) is included and can be built as a debug APK. It is an early test target and not yet a finished mobile release.
 
-The desktop app shares the currently playing song, artist and live progress with the local Discord desktop client. It reconnects automatically if Discord starts later or restarts. Pausing, buffering, stopping, closing Wavo or disabling **Settings → Playback → Discord Rich Presence** removes the activity. No Discord login, bot token or client secret is needed. Enable activity sharing in Discord to make the presence visible.
+## What Wavo can do
 
-New installations start in English regardless of the system language. A language explicitly selected in Wavo remains saved.
+### Listen
 
-## Music API
+- Search the catalog and play tracks, albums, artists and playlists without leaving the app.
+- Queue management with play next, add to queue, reorder, clear upcoming and save the queue as a playlist.
+- Shuffle, **Smart Shuffle** that favors artists you like, and autoplay radio when the queue ends.
+- Speed and pitch control with key lock, vinyl-style linked pitch, presets and reverb.
+- Sleep timer with presets, a custom duration up to 24 hours, or stop after the current track.
+- Media keys, in-app shortcuts and optional system-wide global shortcuts.
 
-Catalog search and playback use the desktop client's YouTube Music integration. Home discovery also uses that catalog. Lyrics are fetched from LRCLIB. Likes, saved albums/artists/catalog playlists, user playlists, and listening history are stored on this device under the signed-in Supabase user ID; they do not sync between devices. Supabase handles sign-in, sessions, friendships, private messages and shared listening session state.
+### Lyrics
 
-The **Friends** page supports username search, friend requests, private chat, playlist and album/EP sharing, and shared listening sessions. A shared collection is sent as a playable track snapshot; the recipient can open catalog collections or import a copy into their library. The sender's local playlist is not made public. For shared listening, the host starts a session and invites accepted friends. The host's track, play/pause state, position and upcoming queue sync to participants; each device streams the catalog track itself. Guests can request songs, skips and queue moves when the host enables those permissions for everyone or for individual friends. There is no microphone or voice chat. Run [the social database migration](supabase/migrations/202610190001_wavo_social.sql), [the listening sessions migration](supabase/migrations/202610190002_wavo_listening_rooms.sql), and [the queue and permissions migration](supabase/migrations/202610200001_wavo_listening_queue.sql) in that order in the existing Supabase project's SQL Editor.
+- Line-synchronized and word-synchronized lyrics from multiple providers, including LRCLIB.
+- Manual word-timing editor for songs without word-level timestamps.
+- Lyrics offset in milliseconds or seconds, provider switching and intro/outro pause lines.
+- Fullscreen player with dynamic WebGL backgrounds, resizable artwork and a hideable lyrics pane.
 
-User playlists can be backed up as JSON and imported on another device from Settings → Storage. Imports add copies to the signed-in account on that device. The queue can be saved as a playlist, and the mini player has a sleep timer with 15, 30, 45, and 60 minute options or a stop after the current track.
+### Library and discovery
 
-Other legacy music features may still call the existing music API at `https://api.tryliner.fun` and may require its old account system. Supabase tokens are **not** sent there.
+- Favorites, **disliked songs**, saved albums, saved artists, listening history and your own playlists.
+- Disliked songs are hidden from playlists, queues, radio, autoplay and shuffle, but remain manageable in the library.
+- Home discovery with new releases, charts, moods and genres, daily mixes and personalized recommendations.
+- Grid and list views, sorting, search and a storage breakdown for covers, audio, lyrics and metadata.
 
-To connect such an API, set `VITE_API_URL` to its HTTPS URL and `VITE_MUSIC_API_ACCEPTS_SUPABASE_JWT=true` in `.env.local`, then rebuild. The app does not assume that the old service accepts Supabase credentials.
+### Imports and sharing
 
-The Windows installer is built locally in `release/`. The auto-updater is configured for GitHub releases at `xtaipy123-a11y/Wavo`; a local installer is not published automatically. See [RELEASING.md](RELEASING.md) for the first GitHub release. Local share links use the `wavo://` protocol.
+- Import playlists from Spotify, YouTube, SoundCloud, Deezer and Apple Music links.
+- Review proposed matches before importing and skip tracks that cannot be matched.
+- Import SoundCloud likes by username.
+- Share self-contained playlist links that carry the full track snapshot; recipients import a copy.
+- Share albums and playlists with friends in chat, or back up your playlists as JSON.
+
+### Offline
+
+- Download single tracks, full albums and playlists for offline listening.
+- Optional automatic downloads for new favorites and playlist additions (off by default).
+- Configurable cache limits with automatic cleanup of older files.
+
+### Desktop experience
+
+- Mini player and a floating, always-on-top desktop overlay.
+- Discord Rich Presence with the current song, artist and live progress.
+- Custom wallpapers (including animated GIFs), glassmorphism blur, accent branding and installable theme files.
+- `wavo://` deep links for tracks, albums, artists, playlists and private releases.
+- Automatic updates from GitHub Releases in the installed desktop app.
+
+### Social and cloud
+
+- Friends, friend requests, private chat and public or private profiles.
+- Shared listening sessions: synchronized playback, shared queue, voting, guest requests and per-friend permissions.
+- **Wavo Cloud** sync for favorites, playlists, saved collections, history, queue, settings and smart-playlist rules.
+- **Wavo Connect** to see signed-in devices and continue playback on another device.
+- Music statistics, Wavo Wrapped and smart playlists.
+- Private music uploads (MP3, WAV, FLAC, M4A, AAC, OGG, WebM), private singles, EPs and albums, shareable with friends or through expiring links.
+
+### Privacy
+
+- Your library, dislikes and playback cache are stored locally per signed-in account.
+- Supabase handles authentication and social state; no service-role key ships with the app.
+- Anonymous telemetry is optional and can be disabled completely in Settings.
+- Supabase tokens are not forwarded to the legacy music API.
+
+## Install Wavo
+
+1. Open the [latest release](https://github.com/xtaipy123-a11y/Wavo/releases/latest).
+2. Download `Wavo-Setup-<version>.exe` and run the installer.
+3. Sign in to your Wavo account. Production builds always require sign-in.
+
+Installed builds update themselves through GitHub Releases. macOS and Linux packages can be built from source with the commands below; official installers are currently published for Windows.
+
+## Changelog and releases
+
+Every Wavo version ships with a changelog. The complete history is in [RELEASE_NOTES.md](RELEASE_NOTES.md), and each GitHub release publishes the same notes together with the Windows installer, blockmap and update metadata.
+
+The release process is documented in [RELEASING.md](RELEASING.md). The app version is read from `package.json`; Android and the in-app version labels are updated alongside it.
+
+## License
+
+Wavo is released under the MIT License. See [LICENSE](LICENSE).

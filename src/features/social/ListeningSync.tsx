@@ -4,8 +4,25 @@ import { getSupabaseClient } from "@/shared/supabase/client";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { playerEngine } from "@/features/player/engine/playerEngine";
 import { usePlayerStore } from "@/features/player/store/playerStore";
-import { listeningClient } from "./listeningClient";
-import { canRequestListeningAction, expectedListeningPosition, isListeningRoomFresh, listeningError, upcomingListeningQueue, useListeningStore } from "./listeningStore";
+import { listeningClient, type ListeningRoom } from "./listeningClient";
+import {
+  advanceListeningAnchor,
+  canRequestListeningAction,
+  estimateListeningClockSkew,
+  expectedAnchorPosition,
+  isListeningAnchorFresh,
+  listeningError,
+  upcomingListeningQueue,
+  useListeningStore,
+  type ListeningPlaybackAnchor,
+} from "./listeningStore";
+
+const PUBLISH_HEARTBEAT_MS = 2000;
+const PUBLISH_DEBOUNCE_MS = 120;
+const REFRESH_POLL_MS = 5000;
+const COMMAND_POLL_MS = 1600;
+const GUEST_SYNC_MS = 750;
+const SEEK_TOLERANCE_MS = 450;
 
 export default function ListeningSync() {
   const userId = useAuthStore((state) => state.user?.id);
@@ -15,7 +32,7 @@ export default function ListeningSync() {
     const client = getSupabaseClient();
     const refresh = () => void useListeningStore.getState().refresh();
     refresh();
-    const poll = window.setInterval(refresh, 5000);
+    const poll = window.setInterval(refresh, REFRESH_POLL_MS);
     const channel = client.channel(`wavo-listening-${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "wavo_listening_rooms" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "wavo_listening_members" }, refresh)
@@ -38,7 +55,8 @@ export default function ListeningSync() {
       const queueKey = JSON.stringify(queue);
       const expected = published ? published.positionMs + (published.isPlaying ? Date.now() - published.at : 0) : 0;
       const changed = !published || published.roomId !== room.id || published.trackId !== trackId ||
-        published.isPlaying !== isPlaying || published.queueKey !== queueKey || Math.abs(positionMs - expected) > 1600;
+        published.isPlaying !== isPlaying || published.queueKey !== queueKey ||
+        (!isPlaying && published.positionMs !== positionMs) || Math.abs(positionMs - expected) > 1500;
       if (!changed && !(heartbeat && isPlaying)) return;
       if (publishing) { pending = true; return; }
       publishing = true;
@@ -54,10 +72,11 @@ export default function ListeningSync() {
     };
     const onPlayerChange = () => {
       window.clearTimeout(debounce);
-      debounce = window.setTimeout(() => void publish(), 120);
+      debounce = window.setTimeout(() => void publish(), PUBLISH_DEBOUNCE_MS);
     };
     const unsubscribe = usePlayerStore.subscribe(onPlayerChange);
-    const heartbeat = window.setInterval(() => void publish(true), 3000);
+    const heartbeat = window.setInterval(() => void publish(true), PUBLISH_HEARTBEAT_MS);
+
     let processing = false;
     const processCommands = async () => {
       const room = useListeningStore.getState().room;
@@ -88,44 +107,96 @@ export default function ListeningSync() {
         processing = false;
       }
     };
-    const commandPoll = window.setInterval(() => void processCommands(), 1600);
+    const commandPoll = window.setInterval(() => void processCommands(), COMMAND_POLL_MS);
     void processCommands();
+
+    // Guests follow the host by extrapolating from the last published position.
+    // The clock skew estimate makes this independent of the device clock, and
+    // the anchor only moves when the host actually changes playback.
+    let anchor: ListeningPlaybackAnchor | null = null;
+    let anchorRoomId: string | null = null;
+    let clockSkew: number | null = null;
+    let seenUpdatedAt: string | null = null;
     let loadingTrack: string | null = null;
+
+    const observeRoom = (room: ListeningRoom) => {
+      if (anchorRoomId !== room.id) {
+        anchorRoomId = room.id;
+        anchor = null;
+        clockSkew = null;
+        seenUpdatedAt = null;
+      }
+      if (seenUpdatedAt !== room.updated_at) {
+        seenUpdatedAt = room.updated_at;
+        clockSkew = estimateListeningClockSkew(room, Date.now(), clockSkew);
+      }
+      anchor = advanceListeningAnchor(anchor, room);
+    };
 
     const syncGuest = async () => {
       const room = useListeningStore.getState().room;
       if (!room || room.host_id === userId || !room.active) return;
+      observeRoom(room);
       const player = usePlayerStore.getState();
       if (!room.track_id) {
         if (player.status === "playing" || player.status === "loading") playerEngine.pause();
         return;
       }
+
       if (player.currentTrack?.id !== room.track_id) {
         if (loadingTrack) return;
+        if (!room.is_playing) {
+          if (player.status === "playing" || player.status === "loading") playerEngine.pause();
+          return;
+        }
         loadingTrack = room.track_id;
         try {
-          const track = toClientTrack(await api.getTrack(room.track_id));
+          let track = toClientTrack(await api.getTrack(room.track_id));
           const latest = useListeningStore.getState().room;
           if (!latest || latest.id !== room.id || latest.track_id !== track.id) return;
+          if (!track.title) {
+            track = { ...track, title: room.track_title ?? "Wavo" };
+          }
           await playerEngine.playTrack(track, [track], `listening:${room.id}`);
-          if (!latest.is_playing || !isListeningRoomFresh(latest)) playerEngine.pause();
-          playerEngine.seek(Math.min(expectedListeningPosition(latest), track.durationMs || Number.POSITIVE_INFINITY));
-        } catch (cause) {
-          useListeningStore.setState({ error: listeningError(cause) });
+        } catch {
+          // Metadata can be unavailable (e.g. the catalog API does not host
+          // this source). Playback still works from the id alone, so fall back
+          // to the snapshot title instead of blocking the session.
+          const latest = useListeningStore.getState().room;
+          if (!latest || latest.id !== room.id || latest.track_id !== room.track_id) return;
+          await playerEngine.playTrack(
+            { id: room.track_id, title: room.track_title ?? "Wavo", artists: "", coverUrl: "", durationMs: 0, playCount: 0 },
+            [],
+            `listening:${room.id}`,
+          );
         } finally {
           loadingTrack = null;
         }
-        return;
       }
-      const target = Math.min(expectedListeningPosition(room), player.durationMs || Number.POSITIVE_INFINITY);
-      if (room.is_playing && isListeningRoomFresh(room)) {
-        if (player.status === "paused" || player.status === "idle" || player.status === "error") playerEngine.resume();
-      } else if (player.status === "playing" || player.status === "loading") {
+
+      const latest = useListeningStore.getState().room;
+      if (!latest || latest.id !== room.id) return;
+      observeRoom(latest);
+      const current = usePlayerStore.getState();
+      const skew = clockSkew ?? 0;
+      const fresh = isListeningAnchorFresh(anchor, skew);
+      const target = expectedAnchorPosition(anchor, skew);
+      const duration = current.durationMs || current.currentTrack?.durationMs || 0;
+      // Near the end of the track, stop steering: the host will publish the next
+      // track shortly. Seeking to the final millisecond would just loop playback.
+      const atTrackEnd = latest.is_playing && duration > 0 && target >= duration - 500;
+
+      if (latest.is_playing && fresh && !atTrackEnd) {
+        if (current.status === "paused" || current.status === "idle" || current.status === "error") playerEngine.resume();
+      } else if (!latest.is_playing && (current.status === "playing" || current.status === "loading")) {
         playerEngine.pause();
       }
-      if (Math.abs(usePlayerStore.getState().positionMs - target) > 1700) playerEngine.seek(target);
+      if (!latest.is_playing || !fresh || atTrackEnd) return;
+
+      const bounded = duration > 0 ? Math.min(target, duration) : target;
+      if (Math.abs(usePlayerStore.getState().positionMs - bounded) > SEEK_TOLERANCE_MS) playerEngine.seek(bounded);
     };
-    const follower = window.setInterval(() => void syncGuest(), 1000);
+    const follower = window.setInterval(() => void syncGuest(), GUEST_SYNC_MS);
     void syncGuest();
 
     return () => {

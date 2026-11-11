@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   createElement,
+  useMemo,
   useRef,
   useState,
   memo,
@@ -13,15 +14,15 @@ import { usePlayerState } from "../hooks/usePlayerState";
 import { playerEngine } from "../engine/playerEngine";
 import {
   useLyricsStore,
-  LyricsProviderIsland,
   braccatoThemeCss,
-  hasSyncedLyricsSources,
 } from "@/features/lyrics";
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from "framer-motion";
 import { PlayerUiElements } from "./PlayerUiElements";
 import { TimedWordLyricsView } from "./TimedWordLyricsView";
 import { WordTimingEditor } from "./WordTimingEditor";
 import { hasWordTimedLyrics } from "@/features/lyrics/engine/wordTiming";
+import { injectLyricsDots } from "@/features/lyrics/engine/lyricsGaps";
+import { LyricsDots } from "./LyricsDots";
 import { DownLine } from "@mingcute/react";
 import { preloadCoverArt, useCoverSrc } from "@/features/covers";
 import "@braccato/core/element";
@@ -459,12 +460,9 @@ export function FullscreenPlayer({
   const {
     braccatoLyrics,
     syncedLines,
-    rawFormat,
     lyricsLoading,
     lyricsError,
     plainLyrics,
-    activeProvider,
-    availableProviders,
     currentLyricsTrackId,
   } = useLyricsStore();
 
@@ -482,16 +480,12 @@ export function FullscreenPlayer({
   const isMatchingTrack = Boolean(currentTrackId && currentLyricsTrackId === currentTrackId);
   const hasLyrics = isMatchingTrack && braccatoLyrics.length > 0;
   const hasWordTiming = hasLyrics && hasWordTimedLyrics(syncedLines);
-  const canEditWordTiming = hasLyrics && !lyricsLoading &&
-    (!hasWordTiming || activeProvider === "wavo-manual");
   const hasPlainLyrics = isMatchingTrack && Boolean(plainLyrics?.trim()) && plainLyrics !== "[INSTRUMENTAL]";
-  const hasSyncedSources = hasSyncedLyricsSources(
-    availableProviders,
-    braccatoLyrics,
-    rawFormat,
+  const braccatoDisplayLyrics = useMemo(
+    () =>
+      injectLyricsDots(braccatoLyrics, syncedLines, player.durationMs),
+    [braccatoLyrics, syncedLines, player.durationMs],
   );
-  const showProviderIsland =
-    hasLyrics && (hasSyncedSources || availableProviders.length > 1);
   const isInstrumental =
     isMatchingTrack &&
     !lyricsLoading &&
@@ -536,6 +530,7 @@ export function FullscreenPlayer({
               setWordTimingEditorOpen(false);
               setLyricsVisible((visible) => !visible);
             }}
+            onEditWordTiming={() => setWordTimingEditorOpen(true)}
             artworkSize={artworkSize}
             preferredArtworkSize={preferredArtworkSize}
             onArtworkSizeChange={(size) => {
@@ -594,22 +589,6 @@ export function FullscreenPlayer({
             </div>
 
             <div className="min-w-0 flex-1 h-full min-h-0 overflow-hidden pl-2 pr-6 flex flex-col relative">
-              {hasLyrics && !lyricsLoading && (
-                <div className="absolute right-1 top-[52px] z-30 flex items-center gap-2 rounded-lg bg-black/50 px-2 py-1.5 text-[11px] text-white/70 backdrop-blur-xl">
-                  <span>{t(hasWordTiming ? "player.word_timing_available" : "player.line_timing_only")}</span>
-                  {canEditWordTiming && (
-                    <button type="button" onClick={() => setWordTimingEditorOpen(true)} className="rounded-md bg-white/15 px-2 py-1 text-white hover:bg-white/25">
-                      {t("player.word_timing_edit")}
-                    </button>
-                  )}
-                </div>
-              )}
-              {showProviderIsland && (
-                <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">
-                  <LyricsProviderIsland />
-                </div>
-              )}
-
               <div
                 className="flex-1 min-h-0 relative w-full h-full"
                 style={{
@@ -627,8 +606,8 @@ export function FullscreenPlayer({
                       className="absolute inset-0 flex flex-col"
                     >
                       {hasWordTiming
-                        ? <TimedWordLyricsView lines={syncedLines} />
-                        : <BraccatoLyricsView lyrics={braccatoLyrics} />}
+                        ? <TimedWordLyricsView lines={syncedLines} durationMs={player.durationMs} />
+                        : <BraccatoLyricsView lyrics={braccatoDisplayLyrics} />}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -665,7 +644,12 @@ export function FullscreenPlayer({
                     transition={{ duration: 0.15 }}
                     className="absolute inset-0 flex items-center justify-center text-text-tertiary text-lg"
                   >
-                    <span>{t("player.instrumental")}</span>
+                    <div className="flex flex-col items-center gap-3">
+                      <span className="text-[clamp(1.5rem,2.35vw,3rem)] font-semibold leading-none text-white/70">
+                        <LyricsDots animated />
+                      </span>
+                      <span>{t("player.instrumental")}</span>
+                    </div>
                   </motion.div>
                 ) : !hasLyrics && hasPlainLyrics ? (
                   <motion.div

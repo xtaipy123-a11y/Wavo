@@ -17,6 +17,108 @@ import {
 } from "./innertubeCollectionMapper";
 import { getQueueItems, getTrackItem, mapInnertubeRadioTrack, mapInnertubeTrackDetails } from "./innertubeQueueMapper";
 import { searchCatalog } from "./innertubeSearch";
+import { mapInnertubeSearchResult } from "./innertubeSearchMapper";
+import { getText } from "./innertubeJson";
+import { asArray, asRecord, walkRecords, type JsonRecord } from "@/shared/utils/json";
+
+export interface HomeShelf {
+  title: string;
+  items: SearchResult[];
+}
+
+function mapHomeItem(record: JsonRecord): SearchResult | null {
+  const card = asRecord(record.musicTwoRowItemRenderer);
+  return mapInnertubeSearchResult(card ? {
+    musicCardShelfRenderer: { ...card, thumbnail: card.thumbnailRenderer },
+  } : record);
+}
+
+/** Maps the carousel shelves of a browse response, keeping YouTube Music's own shelf titles. */
+export function mapHomeShelves(body: unknown): HomeShelf[] {
+  const shelves: HomeShelf[] = [];
+  walkRecords(body, (record) => {
+    const shelf = asRecord(record.musicCarouselShelfRenderer);
+    if (!shelf) return false;
+    const header = asRecord(asRecord(shelf.header)?.musicCarouselShelfBasicHeaderRenderer);
+    const items: SearchResult[] = [];
+    const seen = new Set<string>();
+    for (const raw of asArray(shelf.contents)) {
+      const item = mapHomeItem(asRecord(raw) ?? {});
+      if (!item) continue;
+      const key = `${item.type}:${item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push(item);
+    }
+    const title = getText(header?.title) ?? "";
+    if (items.length > 0) shelves.push({ title, items });
+    return true;
+  });
+  return shelves;
+}
+
+async function getHomeShelves(signal?: AbortSignal): Promise<HomeShelf[]> {
+  const shelves = mapHomeShelves(await browse("FEmusic_home", undefined, signal));
+  if (!shelves.length) throw new InnertubeError("Music discovery is temporarily unavailable.", 502);
+  return shelves;
+}
+
+async function getNewReleaseShelves(signal?: AbortSignal): Promise<HomeShelf[]> {
+  return mapHomeShelves(await browse("FEmusic_new_releases", undefined, signal));
+}
+
+async function getChartShelves(signal?: AbortSignal): Promise<HomeShelf[]> {
+  return mapHomeShelves(await browse("FEmusic_charts", undefined, signal));
+}
+
+export interface MoodCategory {
+  title: string;
+  browseId: string;
+  params?: string;
+}
+
+function mapMoodCategory(record: JsonRecord): MoodCategory | null {
+  const button = asRecord(record.musicNavigationButtonRenderer);
+  if (!button) return null;
+  const title = getText(button.buttonText);
+  const endpoint = asRecord(asRecord(button.clickCommand)?.browseEndpoint);
+  const browseId = typeof endpoint?.browseId === "string" ? endpoint.browseId : undefined;
+  if (!title || !browseId) return null;
+  return {
+    title,
+    browseId,
+    params: typeof endpoint?.params === "string" ? endpoint.params : undefined,
+  };
+}
+
+/** Reads the mood/genre buttons from the "Moods & genres" browse page. */
+export function mapMoodCategories(body: unknown): MoodCategory[] {
+  const categories: MoodCategory[] = [];
+  const seen = new Set<string>();
+  walkRecords(body, (record) => {
+    const category = mapMoodCategory(record);
+    if (!category) return false;
+    const key = `${category.title}:${category.params ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    categories.push(category);
+    return false;
+  });
+  return categories;
+}
+
+async function getMoodCategories(signal?: AbortSignal): Promise<MoodCategory[]> {
+  return mapMoodCategories(await browse("FEmusic_moods_and_genres", undefined, signal));
+}
+
+/** Loads the playlist shelves of one mood/genre and keeps the category in the title. */
+async function getCategoryShelves(category: MoodCategory, signal?: AbortSignal): Promise<HomeShelf[]> {
+  const shelves = mapHomeShelves(await browse(category.browseId, category.params, signal));
+  return shelves.map((shelf) => ({
+    title: shelf.title ? `${category.title} · ${shelf.title}` : category.title,
+    items: shelf.items,
+  }));
+}
 
 export interface RadioOptions {
   k?: number;
@@ -109,6 +211,11 @@ function search(query: string, type: SearchType = "all", signal?: AbortSignal): 
 }
 
 export const innertubeCatalog = {
+  getHomeShelves,
+  getNewReleaseShelves,
+  getChartShelves,
+  getMoodCategories,
+  getCategoryShelves,
   search,
   getArtist,
   getAlbum,

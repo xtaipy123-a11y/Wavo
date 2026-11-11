@@ -1,4 +1,5 @@
 import { innertubeCatalog } from "@/shared/media/innertube";
+import { resolveSoundCloudTrack, toSoundCloudTrackId } from "@/shared/media/soundcloud";
 import { isAbortError } from "@/shared/utils/abort";
 import { log } from "@/shared/utils/logger";
 import type {
@@ -13,9 +14,35 @@ import type {
 } from "@/shared/contracts";
 
 const SERVER_ONLY_ID = /^sc[:_]/i;
+const SOUNDCLOUD_ID = /^(?:sc:|soundcloud:)/i;
 
 export function isClientCatalogId(id: string): boolean {
   return !SERVER_ONLY_ID.test(id.trim());
+}
+
+function soundCloudTrackId(id: string): string | null {
+  const trimmed = id.trim();
+  return SOUNDCLOUD_ID.test(trimmed) ? toSoundCloudTrackId(trimmed) : null;
+}
+
+async function soundCloudTrackDetails(id: string): Promise<TrackDetails> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const track = await resolveSoundCloudTrack(id, { signal: controller.signal });
+    return {
+      id: track.id,
+      title: track.title,
+      artists: track.artist ? [{ id: "", name: track.artist }] : [],
+      durationMs: track.durationMs,
+      ...(track.coverUrl ? { cover: { url: track.coverUrl, width: 500, height: 500 } } : {}),
+      ...(track.album ? { album: { id: "", title: track.album } } : {}),
+      ...(track.releaseDate ? { releaseDate: track.releaseDate } : {}),
+      ...(track.explicit ? { explicit: true } : {}),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function preferClient<T>(label: string, client: () => Promise<T>, server: () => Promise<T>): Promise<T> {
@@ -31,6 +58,22 @@ async function preferClient<T>(label: string, client: () => Promise<T>, server: 
 const SNAPSHOT_TIMEOUT_MS = 4000;
 
 async function resolveSnapshot(id: string): Promise<Track | undefined> {
+  if (soundCloudTrackId(id)) {
+    try {
+      const details = await soundCloudTrackDetails(id);
+      return {
+        id: details.id,
+        title: details.title,
+        artists: details.artists,
+        durationMs: details.durationMs,
+        ...(details.album ? { album: details.album } : {}),
+        ...(details.cover ? { cover: details.cover } : {}),
+        ...(details.explicit !== undefined ? { explicit: details.explicit } : {}),
+      };
+    } catch {
+      return undefined;
+    }
+  }
   if (!isClientCatalogId(id)) return undefined;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SNAPSHOT_TIMEOUT_MS);
@@ -64,6 +107,7 @@ export const clientCatalog = {
   },
 
   getTrack(id: string, server: () => Promise<TrackDetails>): Promise<TrackDetails> {
+    if (soundCloudTrackId(id)) return soundCloudTrackDetails(id);
     if (!isClientCatalogId(id)) return server();
     return preferClient("track", () => innertubeCatalog.getTrack(id), server);
   },

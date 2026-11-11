@@ -1,10 +1,12 @@
 export const braccatoThemeCss = `
 .blyrics-container {
   --blyrics-font-family: "Satoshi", var(--font-inter), system-ui, sans-serif;
-  --blyrics-font-size: 2rem;
+  --blyrics-font-size: clamp(1.5rem, 2.35vw, 3rem);
   --blyrics-font-weight: 600;
   --blyrics-line-height: 1.4;
-  --blyrics-padding: 1.25rem;
+  --blyrics-padding: 1rem;
+  --blyrics-inactive-opacity: 0.38;
+  --blyrics-active-opacity: 1;
   --blyrics-glow-color: transparent;
   --blyrics-highlight-color: transparent;
   --blyrics-scale: 1;
@@ -16,7 +18,10 @@ export const braccatoThemeCss = `
   --blyrics-word-wobble-transform-to: none;
 }
 
+/* Match the React timed view: the host already carries the horizontal
+   padding, so lines only add the vertical rhythm. */
 .blyrics-container > div {
+  padding: 1rem 0 !important;
   transform: none !important;
 }
 

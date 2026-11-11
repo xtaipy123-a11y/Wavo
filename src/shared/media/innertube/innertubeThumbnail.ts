@@ -29,6 +29,21 @@ export function toSquareArtworkUrl(url: string, size = 512): string {
   return `${url}${suffix}`;
 }
 
+const videoThumbnailHost = /^https?:\/\/[^/]*ytimg\.com\//i;
+
+/**
+ * Card-sized artwork for home rows. Profile/playlist art is resized like
+ * `toSquareArtworkUrl`; video thumbnails fall back to 480×360 `hqdefault`
+ * instead of 1280×720 `hq720`, which is five times smaller to decode.
+ */
+export function toCardArtworkUrl(url: string, size = 350): string {
+  if (!url) return url;
+  const square = toSquareArtworkUrl(url, size);
+  if (square !== url) return square;
+  if (!videoThumbnailHost.test(url)) return url;
+  return url.replace(/\/(?:maxresdefault|sddefault|hq720|hqdefault)\.jpg/i, "/hqdefault.jpg");
+}
+
 function readEntries(thumbnail: unknown): ThumbnailEntry[] {
   const record = asRecord(thumbnail);
   const inner = asRecord(asRecord(record?.musicThumbnailRenderer)?.thumbnail) ?? record;

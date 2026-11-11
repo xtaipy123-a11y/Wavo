@@ -51,6 +51,23 @@ describe("runClientImport", () => {
     expect(progress[progress.length - 1]).toBe(2);
   });
 
+  it("reports hidden source tracks as dislikes for approved matches", async () => {
+    mocks.parseImportSource.mockResolvedValue({
+      ...spotifyPlaylist,
+      tracks: [
+        { ...spotifyPlaylist.tracks[0], disliked: true },
+        { ...spotifyPlaylist.tracks[1], disliked: true },
+      ],
+    });
+    mocks.searchRaw.mockImplementation(async (query: string) =>
+      query.toLowerCase().includes("blinding") ? [searchTrack("4NRXx6U8ABQ", "Blinding Lights", "The Weeknd", 200_000)] : [],
+    );
+
+    const outcome = await runClientImport(spotifyPlaylist.sourceUrl);
+
+    expect(outcome.dislikedTrackIds).toEqual(["4NRXx6U8ABQ"]);
+  });
+
   it("sends ambiguous matches with a candidate to review", async () => {
     mocks.parseImportSource.mockResolvedValue({ ...spotifyPlaylist, tracks: [spotifyPlaylist.tracks[0]] });
     mocks.searchRaw.mockResolvedValue([searchTrack("liveversion", "Blinding Lights (Live at SNL)", "The Weeknd", 260_000)]);

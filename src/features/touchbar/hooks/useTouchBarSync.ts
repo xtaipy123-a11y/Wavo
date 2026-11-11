@@ -90,9 +90,12 @@ export function useTouchBarSync() {
             playerEngine.setVolume(action.payload.volume);
           }
           break;
-        case "toggleShuffle":
-          playerEngine.setShuffle(!playerEngine.getSnapshot().shuffle);
+        case "toggleShuffle": {
+          const nextShuffle = !playerEngine.getSnapshot().shuffle;
+          if (!nextShuffle) usePlayerStore.getState().setSmartShuffle(false);
+          playerEngine.setShuffle(nextShuffle);
           break;
+        }
         case "toggleFullscreen": {
           const currentFs = usePlayerStore.getState().fullscreen || location.pathname === "/player";
           if (currentFs) {

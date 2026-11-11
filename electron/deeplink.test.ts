@@ -23,6 +23,18 @@ describe("parseDeeplink", () => {
       .toEqual({ type: "release", id: "11111111-1111-4111-8111-111111111111", token });
   });
 
+  it("accepts self-contained playlist share links", () => {
+    expect(parseDeeplink("wavo://playlist?d=H4sIAAAA")).toEqual({
+      type: "playlist",
+      id: "shared",
+      data: "H4sIAAAA",
+    });
+    expect(parseDeeplink("wavo://playlist?d=abc&id=VLPLD8jNKEyHYB2DHh5vXSI4USLFo29vzUYl")).toBeNull();
+    expect(parseDeeplink("wavo://playlist?d=abc&d=def")).toBeNull();
+    expect(parseDeeplink("wavo://playlist?d=abc&x=1")).toBeNull();
+    expect(parseDeeplink("wavo://playlist?d=ab c")).toBeNull();
+  });
+
   it("rejects smuggled urls", () => {
     expect(parseDeeplink("https://evil.com")).toBeNull();
     expect(parseDeeplink("javascript:alert(1)")).toBeNull();

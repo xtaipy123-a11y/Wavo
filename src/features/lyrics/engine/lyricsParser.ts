@@ -21,6 +21,39 @@ export interface ParsedLyrics {
   plainLyrics: string | null;
 }
 
+// AMLL/Apple TTML embeds per-line translations and romanizations as inline
+// `<span ttm:role="x-translation">` / `<span ttm:role="x-roman">` siblings of the
+// timed word spans. They carry no `begin`/`end`, so the parser turns them into
+// zero-length parts at time 0 that leak into the lyric text and corrupt any
+// index-based word highlighting. Drop these spans before parsing.
+const TTML_SECONDARY_ROLES = ["x-translation", "x-roman"];
+
+function stripTtmlSecondarySpans(raw: string): string {
+  let output = raw;
+  for (const role of TTML_SECONDARY_ROLES) {
+    const openTag = new RegExp(`<span\\b[^>]*\\bttm:role="${role}"[^>]*>`, "i");
+    let match: RegExpExecArray | null;
+    while ((match = openTag.exec(output))) {
+      const start = match.index;
+      const tagPattern = /<span\b[^>]*>|<\/span>/gi;
+      tagPattern.lastIndex = start + match[0].length;
+      let depth = 1;
+      let end = -1;
+      let tag: RegExpExecArray | null;
+      while ((tag = tagPattern.exec(output))) {
+        depth += tag[0].startsWith("</") ? -1 : 1;
+        if (depth === 0) {
+          end = tag.index + tag[0].length;
+          break;
+        }
+      }
+      if (end === -1) break;
+      output = output.slice(0, start) + output.slice(end);
+    }
+  }
+  return output;
+}
+
 function tryParseRichsync(raw: string): Lyric[] | null {
   const trimmed = raw.trim();
   if (!trimmed.startsWith("[")) return null;
@@ -122,8 +155,9 @@ export function parseRawLyrics(
   try {
     const richsyncLyrics = tryParseRichsync(trimmed);
     const mxmSubtitles = richsyncLyrics ? null : tryParseMxmSubtitles(trimmed);
+    const markup = stripTtmlSecondarySpans(trimmed);
     const braccatoLyrics: Lyric[] =
-      richsyncLyrics ?? mxmSubtitles ?? detectParser(trimmed).parse(trimmed, songDurationMs);
+      richsyncLyrics ?? mxmSubtitles ?? detectParser(markup).parse(markup, songDurationMs);
 
     if (!braccatoLyrics || braccatoLyrics.length === 0) {
       return {

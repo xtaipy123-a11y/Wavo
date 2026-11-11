@@ -1,10 +1,13 @@
 import { LOCAL_IMPORT_PREFIX, registerLocalImportHandler } from "@/shared/api/localImports";
 import type { ImportJob, ImportReview, ImportSource, Track } from "@/shared/contracts";
+import { toClientTrack } from "@/shared/api/track";
+import { getDislikeOwnerId, useDislikeStore } from "../../../store/dislikeStore";
 import { finalizeImportedPlaylist } from "./finalizeImport";
 
 interface LocalImportRecord {
   job: ImportJob;
   reviewItems: ImportReview[];
+  dislikedTrackIds: Set<string>;
 }
 
 type JobListener = (job: ImportJob) => void;
@@ -28,8 +31,20 @@ export function createLocalImportJob(source: ImportSource, sourceUrl: string): I
     createdAt: new Date().toISOString(),
     startedAt: new Date().toISOString(),
   };
-  records.set(job.id, { job, reviewItems: [] });
+  records.set(job.id, { job, reviewItems: [], dislikedTrackIds: new Set() });
   return job;
+}
+
+export function setLocalImportDislikes(jobId: string, trackIds: Iterable<string>): void {
+  const record = records.get(jobId);
+  if (!record) return;
+  record.dislikedTrackIds = new Set(trackIds);
+}
+
+export function addLocalImportDislikes(jobId: string, trackIds: Iterable<string>): void {
+  const record = records.get(jobId);
+  if (!record) return;
+  for (const trackId of trackIds) record.dislikedTrackIds.add(trackId);
 }
 
 export function updateLocalImportJob(jobId: string, patch: Partial<ImportJob>, reviewItems?: ImportReview[]): ImportJob | undefined {
@@ -63,6 +78,14 @@ export async function finalizeLocalImport(
       description ?? record.job.description,
       tracks,
     );
+    const dislikedTracks = record.dislikedTrackIds.size
+      ? tracks.filter((track) => record.dislikedTrackIds.has(track.id))
+      : [];
+    if (dislikedTracks.length) {
+      const ownerId = getDislikeOwnerId();
+      const store = useDislikeStore.getState();
+      for (const track of dislikedTracks) store.addDislike(ownerId, toClientTrack(track));
+    }
     updateLocalImportJob(jobId, {
       status: "completed",
       requiresDecision: false,

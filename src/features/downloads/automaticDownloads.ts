@@ -14,8 +14,8 @@ interface AutomaticDownloadState {
 }
 
 export const useAutomaticDownloadStore = create<AutomaticDownloadState>()(persist((set, get) => ({
-  favorites: true,
-  playlists: true,
+  favorites: false,
+  playlists: false,
   pending: [],
   setEnabled: (reason, enabled) => set((state) => ({
     [reason]: enabled,
@@ -28,7 +28,14 @@ export const useAutomaticDownloadStore = create<AutomaticDownloadState>()(persis
       ...tracks.map((track) => [track.id, { track, reason }] as const),
     ]).values()] }));
   },
-}), { name: "wavo-automatic-downloads" }));
+}), {
+  name: "wavo-automatic-downloads",
+  version: 1,
+  // Automatic downloads are opt-in: switch them off for users upgrading from the old default-on build.
+  migrate: (persisted, version) => (version < 1
+    ? { ...(persisted as AutomaticDownloadState), favorites: false, playlists: false, pending: [] }
+    : persisted as AutomaticDownloadState),
+}));
 
 export function startAutomaticDownloads(onFailure: (count: number) => void) {
   let stopped = false;

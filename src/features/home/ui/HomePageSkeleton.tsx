@@ -69,24 +69,9 @@ function HomePageSkeletonComponent({
         />
       )}
 
-      <div className="px-8 pt-[48px] pb-[10px]">
-        <div className={`flex min-h-[142px] items-center justify-between gap-6 rounded-[20px] border border-border-primary px-8 ${hasCustomBg ? "apple-glass-action" : "bg-bg-elevated/80"}`}>
-          <div className="flex flex-col gap-3">
-            <div className="skeleton-shimmer h-[10px] w-[42px] rounded" />
-            <div className="skeleton-shimmer h-[30px] w-[220px] rounded-md" />
-            <div className="skeleton-shimmer h-[12px] w-[180px] rounded" />
-          </div>
-          <div className="skeleton-shimmer hidden h-10 w-[140px] rounded-full sm:block" />
-        </div>
-      </div>
-
       {/* Speed Dial Section Skeleton */}
       {showQuickGrid && (
         <div className="flex flex-col select-none">
-          <div className="mt-5 flex items-center gap-3 px-8">
-            <div className="skeleton-shimmer h-[10px] w-[72px] rounded" />
-            <div className="h-px flex-1 bg-border-primary" />
-          </div>
           <div className="mt-[20px] px-8 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="skeleton-shimmer w-5 h-5 rounded-[4px] shrink-0" />
@@ -125,13 +110,9 @@ function HomePageSkeletonComponent({
         </div>
       )}
 
-      {/* Section 1: Listening Right Now */}
-      <div className="mt-8 flex items-center gap-3 px-8">
-        <div className="skeleton-shimmer h-[10px] w-[86px] rounded" />
-        <div className="h-px flex-1 bg-border-primary" />
-      </div>
+      {/* Section 1: Discover */}
       <SectionSkeleton
-        headingMarginTop="mt-[18px]"
+        headingMarginTop="mt-[22px]"
         titleWidth="w-[190px]"
         cardsCount={7}
       />
@@ -143,10 +124,24 @@ function HomePageSkeletonComponent({
         cardsCount={7}
       />
 
-      {/* Section 3: Most Listened of All Time */}
+      {/* Section 3: Albums */}
       <SectionSkeleton
         headingMarginTop="mt-[22px]"
         titleWidth="w-[210px]"
+        cardsCount={7}
+      />
+
+      {/* Section 4: Artists */}
+      <SectionSkeleton
+        headingMarginTop="mt-[22px]"
+        titleWidth="w-[170px]"
+        cardsCount={7}
+      />
+
+      {/* Section 5: Playlists */}
+      <SectionSkeleton
+        headingMarginTop="mt-[22px]"
+        titleWidth="w-[180px]"
         cardsCount={7}
       />
     </div>

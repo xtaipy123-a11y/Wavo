@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   LuRadio,
   LuStepForward,
@@ -9,6 +9,7 @@ import {
   LuFolderPlus,
   LuDownload,
   LuCheck,
+  LuThumbsDown,
 } from "react-icons/lu";
 import type { DropdownMenuItem } from "@/shared/ui/DropdownMenu";
 import { playerEngine } from "../engine/playerEngine";
@@ -19,6 +20,8 @@ import {
   useIsTrackLiked,
   useModalStore,
 } from "@/features/library";
+import { useIsTrackDisliked } from "@/features/library/store/dislikeStore";
+import { useDislikeAction } from "./useDislikeAction";
 import { useTranslation } from "@/languages";
 import { showToast } from "@/shared/ui";
 import { useDownloadStore } from "@/features/downloads/downloadStore";
@@ -59,6 +62,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
   const unlikeMutation = useUnlikeTrack();
 
   const liked = useIsTrackLiked(id);
+  const disliked = useIsTrackDisliked(id);
   const downloaded = useDownloadStore((state) => Boolean(id && state.tracks.some((track) => track.id === id)));
   const downloadStatus = useDownloadStore((state) => id ? state.statusById[id] : undefined);
 
@@ -70,6 +74,27 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
       likeMutation.mutate({ trackId: id, title, artists, coverUrl, durationMs });
     }
   }, [id, liked, likeMutation, unlikeMutation, title, artists, coverUrl, durationMs]);
+
+  const toggleDislike = useDislikeAction();
+  const handleDislikeToggle = useCallback(() => {
+    if (!id) return;
+    toggleDislike({ id, title, artists, coverUrl, durationMs });
+  }, [id, title, artists, coverUrl, durationMs, toggleDislike]);
+
+  const dislikeMenuItem: DropdownMenuItem = useMemo(
+    () => ({
+      id: disliked ? "remove-dislike" : "dislike",
+      label: disliked ? t("common.remove_dislike") : t("common.dislike"),
+      icon: (
+        <LuThumbsDown
+          size={15}
+          className={disliked ? "fill-current text-amber-500" : "text-text-secondary"}
+        />
+      ),
+      onClick: handleDislikeToggle,
+    }),
+    [disliked, handleDislikeToggle, t],
+  );
 
   const buildMenu = useCallback((): DropdownMenuItem[] => {
     const isTrack = searchType === "track" || !searchType;
@@ -170,6 +195,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
             ),
             onClick: handleLike,
           },
+          dislikeMenuItem,
           {
             id: "remove-from-playlist",
             label: t("common.remove_from_playlist"),
@@ -255,6 +281,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
           ),
           onClick: handleLike,
         },
+        dislikeMenuItem,
         {
           id: "add-to-playlist",
           label: t("common.add_to_playlist"),
@@ -305,7 +332,10 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     playlistItemId,
     playlistTitle,
     liked,
+    disliked,
     handleLike,
+    handleDislikeToggle,
+    dislikeMenuItem,
     playlistsData,
     t,
     locale,

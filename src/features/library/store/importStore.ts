@@ -8,6 +8,7 @@ import {
   createLocalImportJob,
   finalizeLocalImport,
   onLocalImportJobChange,
+  setLocalImportDislikes,
   updateLocalImportJob,
 } from "../services/import/manager/localImportJobs";
 import { useModalStore, type TrackDetail } from "./modalStore";
@@ -85,6 +86,7 @@ export const useImportStore = create<ActiveImportState>((set, get) => ({
           onProgress: (progress) => updateLocalImportJob(job.id, progressPatch(progress)),
         });
         if (controller.signal.aborted) return;
+        setLocalImportDislikes(job.id, outcome.dislikedTrackIds);
         const meta = { title: outcome.title, description: outcome.description, result: outcome.result };
 
         if (outcome.reviewItems.length > 0) {

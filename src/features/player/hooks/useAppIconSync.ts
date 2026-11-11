@@ -1,98 +1,62 @@
 import { useEffect } from "react";
-import { useTheme } from "next-themes";
 import { usePlayerStore, type AccentVariant } from "../store/playerStore";
-import defaultLogo from "@/assets/app-icon.png";
-import spotifyLogo from "@/assets/branding/logo-spotify.svg";
-import discordLogo from "@/assets/branding/logo-discord.svg";
-import telegramLogo from "@/assets/branding/logo-telegram.svg";
-import auroraLogo from "@/assets/branding/logo-aurora.svg";
-import sunsetLogo from "@/assets/branding/logo-sunset.svg";
-import oceanLogo from "@/assets/branding/logo-ocean.svg";
-import forestLogo from "@/assets/branding/logo-forest.svg";
-import berryLogo from "@/assets/branding/logo-berry.svg";
-import carbonLogo from "@/assets/branding/logo-carbon.svg";
-import pixelLogo from "@/assets/branding/logo-pixel.svg";
-import scanlinesLogo from "@/assets/branding/logo-scanlines.svg";
-import vhsLogo from "@/assets/branding/logo-vhs.svg";
+import defaultIcon from "@/assets/app-icon.png";
+import spotifyIcon from "@/assets/branding/app-icon-spotify.png";
+import discordIcon from "@/assets/branding/app-icon-discord.png";
+import telegramIcon from "@/assets/branding/app-icon-telegram.png";
+import auroraIcon from "@/assets/branding/app-icon-aurora.png";
+import sunsetIcon from "@/assets/branding/app-icon-sunset.png";
+import oceanIcon from "@/assets/branding/app-icon-ocean.png";
+import forestIcon from "@/assets/branding/app-icon-forest.png";
+import berryIcon from "@/assets/branding/app-icon-berry.png";
+import carbonIcon from "@/assets/branding/app-icon-carbon.png";
+import pixelIcon from "@/assets/branding/app-icon-pixel.png";
+import scanlinesIcon from "@/assets/branding/app-icon-scanlines.png";
+import vhsIcon from "@/assets/branding/app-icon-vhs.png";
 
-const brandingLogos: Record<AccentVariant, string> = {
-  default: defaultLogo,
-  spotify: spotifyLogo,
-  discord: discordLogo,
-  telegram: telegramLogo,
-  aurora: auroraLogo,
-  sunset: sunsetLogo,
-  ocean: oceanLogo,
-  forest: forestLogo,
-  berry: berryLogo,
-  carbon: carbonLogo,
-  pixel: pixelLogo,
-  scanlines: scanlinesLogo,
-  vhs: vhsLogo,
+const brandingIcons: Record<AccentVariant, string> = {
+  default: defaultIcon,
+  spotify: spotifyIcon,
+  discord: discordIcon,
+  telegram: telegramIcon,
+  aurora: auroraIcon,
+  sunset: sunsetIcon,
+  ocean: oceanIcon,
+  forest: forestIcon,
+  berry: berryIcon,
+  carbon: carbonIcon,
+  pixel: pixelIcon,
+  scanlines: scanlinesIcon,
+  vhs: vhsIcon,
 };
 
-const invertedLightVariants: readonly AccentVariant[] = [
-  "carbon",
-  "pixel",
-  "scanlines",
-];
-
-async function renderIconDataUrl(
-  logoSrc: string,
-  isLight: boolean,
-  shouldInvert: boolean,
-): Promise<string> {
+async function renderIconDataUrl(logoSrc: string): Promise<string> {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
 
-  if (logoSrc !== defaultLogo) {
-    ctx.beginPath();
-    if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(0, 0, 512, 512, 112);
-    } else {
-      ctx.rect(0, 0, 512, 512);
-    }
-    ctx.fillStyle = isLight ? "#f5f5f7" : "#0d0d10";
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.08)";
-    ctx.stroke();
-  }
-
   const img = new Image();
   img.crossOrigin = "anonymous";
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Failed to load branding logo for icon"));
+    img.onerror = () => reject(new Error("Failed to load branding app icon"));
     img.src = logoSrc;
   });
 
-  if (isLight && shouldInvert) {
-    ctx.filter = "invert(1)";
-  }
-
-  if (logoSrc === defaultLogo) {
-    ctx.drawImage(img, 0, 0, 512, 512);
-  } else {
-    ctx.drawImage(img, 128.7, 107.8, 254.6, 296.4);
-  }
+  ctx.drawImage(img, 0, 0, 512, 512);
   return canvas.toDataURL("image/png");
 }
 
 export function useAppIconSync() {
   const accentVariant = usePlayerStore((state) => state.accentVariant);
-  const { theme, resolvedTheme } = useTheme();
 
   useEffect(() => {
-    const isLight = (resolvedTheme || theme) === "light";
-    const shouldInvert = invertedLightVariants.includes(accentVariant);
-    const logoSrc = brandingLogos[accentVariant] || defaultLogo;
+    const logoSrc = brandingIcons[accentVariant] || defaultIcon;
     let active = true;
 
-    void renderIconDataUrl(logoSrc, isLight, shouldInvert).then((dataUrl) => {
+    void renderIconDataUrl(logoSrc).then((dataUrl) => {
       if (!active || !dataUrl) return;
 
       if (window.wavoElectron?.setAppIcon) {
@@ -111,5 +75,5 @@ export function useAppIconSync() {
     return () => {
       active = false;
     };
-  }, [accentVariant, theme, resolvedTheme]);
+  }, [accentVariant]);
 }

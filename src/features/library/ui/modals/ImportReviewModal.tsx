@@ -26,6 +26,7 @@ import {
 import { playerEngine, usePlayerState } from "@/features/player";
 import { useToast } from "@/shared/ui";
 import { notifyLibraryChanged } from "../../hooks/usePlaylists";
+import { addLocalImportDislikes } from "../../services/import/manager/localImportJobs";
 
 function formatDuration(ms?: number): string {
   if (!ms || ms <= 0) return "";
@@ -241,6 +242,11 @@ export default function ImportReviewModal() {
         (useImportStore.getState().job?.id === jobId ? useImportStore.getState().approvedTracks : null) ||
         [];
       const allApprovedTracks = [...autoMatchedTracks, ...userApprovedTracks];
+
+      const reviewedDislikedIds = items
+        .filter((item) => (decisions[item.id] || "deny") === "approve" && item.sourceTrack?.disliked && item.proposedTrack)
+        .map((item) => item.proposedTrack!.id);
+      if (reviewedDislikedIds.length > 0) addLocalImportDislikes(jobId, reviewedDislikedIds);
 
       const jobMeta = useImportStore.getState().job;
       const res = await api.decidePlaylistImportReview(

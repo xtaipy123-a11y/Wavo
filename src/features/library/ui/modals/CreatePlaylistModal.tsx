@@ -10,6 +10,7 @@ import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { useModalStore } from "../../store/modalStore";
 import { useImportStore } from "../../store/importStore";
+import { decodePlaylistShareLink, importSharedPlaylist, isPlaylistShareLink } from "../../services/playlistShare";
 import { resolveApiErrorMessage } from "@/shared/api";
 
 type Tab = "create" | "import";
@@ -20,6 +21,7 @@ const TITLE_MAX = 20;
 function detectSourceLabel(raw: string): string | null {
   try {
     let text = raw.trim();
+    if (/^wavo:\/\/playlist(?:[/?#]|$)/i.test(text)) return "Wavo";
     if (!text.startsWith("http://") && !text.startsWith("https://")) {
       text = `https://${text}`;
     }
@@ -116,6 +118,27 @@ export default function CreatePlaylistModal() {
     let target = (overrideUrl ?? importUrl).trim();
     if (!target) {
       setImportError(t("common.paste_link_first"));
+      return;
+    }
+
+    if (isPlaylistShareLink(target)) {
+      setImportError("");
+      setImporting(true);
+      try {
+        const payload = await decodePlaylistShareLink(target);
+        if (!payload) {
+          setImportError(t("playlist.share_link_invalid"));
+          return;
+        }
+        await importSharedPlaylist(payload);
+        notifyLibraryChanged();
+        toast(t("playlist.share_link_imported"), "checkmark", { description: payload.title });
+        close();
+      } catch (err: unknown) {
+        setImportError(resolveApiErrorMessage(err, t, "playlist.share_link_failed"));
+      } finally {
+        setImporting(false);
+      }
       return;
     }
 

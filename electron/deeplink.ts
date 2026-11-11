@@ -19,6 +19,8 @@ export interface DeeplinkTarget {
   type: "artist" | "album" | "playlist" | "track" | "release";
   id: string;
   token?: string;
+  // self-contained playlist share payload (base64url, gzip json)
+  data?: string;
 }
 
 export function parseDeeplink(raw: string): DeeplinkTarget | null {
@@ -37,6 +39,17 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ids[0]!) ||
         !/^[a-f0-9]{64}$/.test(tokens[0]!)) return null;
     return { type: "release", id: ids[0]!, token: tokens[0]! };
+  }
+  if (type === "playlist") {
+    // shared playlists carry the whole snapshot in ?d= and need no id
+    const payloads = url.searchParams.getAll("d");
+    if (payloads.length > 0) {
+      if (payloads.length !== 1 || url.searchParams.getAll("id").length > 0) return null;
+      if ([...url.searchParams.keys()].some((key) => key !== "d")) return null;
+      const data = payloads[0]!;
+      if (!/^[A-Za-z0-9_-]{1,500000}$/.test(data)) return null;
+      return { type: "playlist", id: "shared", data };
+    }
   }
   const pattern = DEEP_LINK_IDS[type];
   if (!pattern) return null;

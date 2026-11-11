@@ -13,7 +13,9 @@ export {
 } from "./soundcloudTranscodings";
 export {
   resolveSoundCloudStream,
+  resolveSoundCloudTrack,
   type ResolvedSoundCloudStream,
   type SoundCloudBufferedStream,
+  type SoundCloudTrackMetadata,
   type SoundCloudUrlStream,
 } from "./soundcloudStream";

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rememberSoundCloudClientId, resetSoundCloudClientIdCache } from "./soundcloudClientId";
-import { resolveSoundCloudStream } from "./soundcloudStream";
+import { resolveSoundCloudStream, resolveSoundCloudTrack } from "./soundcloudStream";
 
 type Route = (url: URL) => Response | undefined;
 
@@ -120,5 +120,30 @@ describe("resolveSoundCloudStream", () => {
 
     await expect(resolveSoundCloudStream("sc:7")).rejects.toMatchObject({ reason: "not_found" });
     await expect(resolveSoundCloudStream("sc:8")).rejects.toMatchObject({ reason: "preview_only" });
+  });
+});
+
+describe("resolveSoundCloudTrack", () => {
+  it("maps soundcloud metadata into track details without a catalog API", async () => {
+    installFetch([
+      (url) => (url.pathname === "/tracks/11" ? json(trackBody([], {
+        id: 11,
+        title: "You & Me Time",
+        duration: 200_000,
+        full_duration: 201_000,
+        artwork_url: "https://i1.sndcdn.com/artworks-example-large.jpg",
+        user: { username: "Uploader" },
+        publisher_metadata: { artist: "ZumGTR", release_title: "Single" },
+      })) : undefined),
+    ]);
+
+    await expect(resolveSoundCloudTrack("sc:11")).resolves.toEqual({
+      id: "sc:11",
+      title: "You & Me Time",
+      artist: "ZumGTR",
+      durationMs: 201_000,
+      coverUrl: "https://i1.sndcdn.com/artworks-example-t500x500.jpg",
+      album: "Single",
+    });
   });
 });

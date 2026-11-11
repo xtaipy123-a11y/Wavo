@@ -1,14 +1,44 @@
-# Neu in Wavo 0.1.55
+# Neu in Wavo 0.156.0
 
 ## Added
 
+- **Entdecken auf der Startseite:** Die Startseite lädt ihre Reihen jetzt direkt aus dem Katalog – Neuerscheinungen, Charts, Stimmungen und Genres inklusive. Eine personalisierte Empfehlung entsteht aus Favoriten, Hörverlauf und Playlists; ohne persönliche Daten greift sie auf die Entdecken-Auswahl zurück.
+- **Ausgeblendete Songs:** Songs lassen sich über das Songmenü ausblenden. Sie verschwinden aus Playlists, Warteschlange, Radio, Autoplay und Shuffle, bleiben aber in der Bibliothek unter **Ausgeblendete Songs** einsehbar. Ein Hinweis bietet direkt **Rückgängig** an.
+- **Smart Shuffle:** Die Shuffle-Schaltfläche wechselt jetzt zwischen aus, zufällig und smart. Smart Shuffle gewichtet Favoriten und meidet ausgeblendete Titel; Mini- und Vollbildplayer markieren den aktiven Modus.
+- **Playlist-Links ohne Share-Server:** Eigene Playlists lassen sich als vollständiger Link teilen. Reihenfolge und Ausblendstatus reisen gzip-gepackt im `wavo://`-Link; Empfänger importieren eine Kopie.
+- **Flexibler Sleep-Timer:** Neben 15, 30, 45 und 60 Minuten sowie „nach diesem Song“ akzeptiert der Timer jetzt eine eigene Dauer von 1 bis 1440 Minuten.
+- **Liedtext-Optionen gebündelt:** Quelle, Offset in Millisekunden oder Sekunden und der Wort-Timing-Editor liegen im Player-Menü an einer Stelle. Intro und Outro mit ausreichend Abstand erscheinen als Pausenlinie.
+- **SoundCloud-Metadaten:** SoundCloud-Titel zeigen Titel, Künstler, Cover und Dauer jetzt auch dann korrekt an, wenn sie über einen Link geöffnet werden; die Auflösung läuft im Client und wird zwischengespeichert.
+- **Marken-Icon unter Windows:** Beim Wechsel des Branding-Stils aktualisiert Wavo auch das App-Icon und bestehende Windows-Verknüpfungen.
+
+## Changes
+
+- **Startseite neu aufgebaut:** Begrüßung mit Namen, kompakte Schnellzugriffe, Ladeplatzhalter und verzögertes Laden von Covern machen den Einstieg schneller. Die Entdecken-Reihen lassen sich bei Fehlern erneut laden.
+- **Automatische Downloads sind jetzt opt-in:** Neuinstallationen und bestehende Installationen starten mit deaktivierten automatischen Downloads. Beide Optionen bleiben unter **Einstellungen → Audio → Offline-Downloads** einzeln aktivierbar.
+- **Freunde und Hörsessions überarbeitet:** Der Bereich für gemeinsames Hören hat ein neues Layout mit Teilnehmern, Warteschlange, Abstimmungen und Rechteverwaltung; Einladungen und Leerzustände sind klarer.
+- **Importe robuster:** Spotify-Importe erkennen versteckte Titel, übernehmen sie als ausgeblendet und behandeln Embed- sowie Pathfinder-Antworten stabiler. SoundCloud-Importe vereinheitlichen ihre Track-IDs.
+- **Branding-Assets vereinheitlicht:** Alle Logo-Varianten liegen als PNG vor; Pixel- und Scanlines-Theme brauchen keine Sonderbehandlung mehr.
+- **Cover laden später:** Cover außerhalb des sichtbaren Bereichs werden erst kurz vor dem Scrollen geladen. Das reduziert Netzwerkanfragen auf der Startseite und in langen Listen.
+
+## Fixes
+
+- **Wort-Timing bei TTML:** Übersetzungs- und Romanisierungs-Spans aus Apple-/AMLL-Liedtexten verfälschen die Wortzeiten nicht mehr.
+- **Warteschlange und Dislikes:** Wird der laufende Titel ausgeblendet, spielt Wavo mit dem nächsten Titel weiter, ohne die Positionen der übrigen Einträge zu verschieben. Ausgeblendete Titel lassen sich nicht erneut manuell einreihen.
+- **Geteilte Playlists:** Beschädigte oder manipulierte Links werden abgefangen und als ungültig gemeldet, statt die App zu verlassen oder leere Playlists anzulegen.
+- **Cover-Wiederholung:** Fehlgeschlagene Cover-Anfragen werden weiterhin automatisch erneut versucht; verzögertes Laden blockiert die Wiederholung nicht mehr.
+- **Liedtext-Lücken:** Intro und Outro werden nur noch als Pause angezeigt, wenn tatsächlich ein ausreichender Abstand zum ersten bzw. letzten Vers besteht.
+
+## Seit 0.1.55
+
+### Added
+
 - **Discord Rich Presence:** Die Desktop-App zeigt den aktuellen Song, Künstler und Wiedergabefortschritt auf Discord, inklusive Link zum Wavo-Download. Die Verbindung wird automatisch wiederhergestellt, wenn Discord später startet. Unter **Einstellungen → Wiedergabe** lässt sich die Anzeige abschalten; beim Pausieren, Laden oder Beenden wird die Aktivität entfernt. Benötigt die Discord-Desktop-App mit aktivierter Aktivitätsfreigabe.
-- **Automatische Offline-Downloads:** Neu favorisierte Songs und neu zu eigenen Playlists hinzugefügte Titel werden auf diesem Gerät automatisch gespeichert, auch bei Playlist-Importen. Beide Optionen sind standardmäßig aktiv und unter **Einstellungen → Audio → Offline-Downloads** einzeln abschaltbar. Ausstehende automatische Downloads bleiben für den nächsten Start oder eine erneute Internetverbindung vorgemerkt.
+- **Automatische Offline-Downloads:** Neu favorisierte Songs und neu zu eigenen Playlists hinzugefügte Titel werden auf diesem Gerät automatisch gespeichert, auch bei Playlist-Importen. Beide Optionen waren zunächst standardmäßig aktiv und sind seit 0.156.0 standardmäßig ausgeschaltet; sie bleiben unter **Einstellungen → Audio → Offline-Downloads** einzeln aktivierbar. Ausstehende automatische Downloads bleiben für den nächsten Start oder eine erneute Internetverbindung vorgemerkt.
 - **Direkt offline speichern:** Download-Schaltflächen neben Songs und bei beliebten Titeln auf der Startseite sowie **Offline speichern** für die geladenen Songs einer Playlist oder eines Albums. Bereits gespeicherte Titel werden übersprungen; bei Sammeldownloads werden Fortschritt und fehlgeschlagene Downloads angezeigt.
 - **Globale Tastenkürzel:** Für jedes Kürzel lässt sich wählen, ob es nur im jeweiligen Wavo-Fenster oder auch bei aktiven anderen Programmen gilt. Nicht verfügbare globale Kombinationen werden in den Einstellungen markiert.
 - **Liedtexte im Vollbild ein- und ausblenden:** Eine neue Schaltfläche blendet den Liedtextbereich mit einem animierten Übergang aus und gibt dem Player die volle Breite. Wavo merkt sich die Auswahl und berücksichtigt reduzierte Bewegung.
 
-## Changes
+### Changes
 
 - **Vollbildplayer aufgeräumt:** Covergröße, Wiedergabegeschwindigkeit und Tonhöhe sind im neuen Menü **Player-Einstellungen** gebündelt. Favoriten lassen sich über das Herz direkt neben dem Songtitel umschalten; Downloads sind über Songlisten und Playlists erreichbar.
 - **Wiederholung deutlicher erkennbar:** Mini- und Vollbildplayer zeigen aktive Wiederholung mit hervorgehobenem Symbol und Statuspunkt. Beschriftungen unterscheiden zwischen ausgeschalteter Wiederholung, Playlist- und Song-Wiederholung.
@@ -16,7 +46,7 @@
 - **Englisch als Startsprache:** Neue Installationen starten unabhängig von der Systemsprache auf Englisch. Eine ausdrücklich gespeicherte Sprachauswahl bleibt erhalten.
 - **Entwicklung ohne Anmeldepflicht:** Der Entwicklungsserver öffnet Wavo standardmäßig ohne Anmeldung; mit `VITE_DEV_SKIP_LOGIN=false` lässt sich der reguläre Anmeldeablauf testen. Entwicklungsfavoriten werden getrennt von echten Konten gespeichert. Veröffentlichte Builds verlangen weiterhin eine Anmeldung.
 
-## Fixes
+### Fixes
 
 - **Windows-Fensterverhalten korrigiert:** Verschieben nutzt die native Fenstersteuerung und vermeidet Größenabweichungen bei nicht ganzzahliger Bildschirmskalierung. Maximieren und Wiederherstellen nutzen wieder das native Windows-Verhalten; Fensterecken passen sich dem maximierten Zustand an.
 - **Downloads robuster:** Gleichzeitige Anfragen für denselben Song teilen sich einen Download; höchstens zwei Downloads laufen parallel. Veraltete Ladevorgänge überschreiben die aktuelle Downloadliste nicht mehr. Auch wartende Downloads können über das Songmenü abgebrochen werden.

@@ -6,6 +6,7 @@ import { usePlayerStore } from "../store/playerStore";
 import { useToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 import { OfflineDownloadButton } from "@/features/downloads/OfflineDownloadButton";
+import TrackDislikeButton from "./TrackDislikeButton";
 
 import type { TrackArtist } from "@/shared/types";
 
@@ -35,6 +36,7 @@ export interface SongCardWithMenuProps {
   icon?: React.ReactNode;
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  muted?: boolean;
 }
 
 function SongCardWithMenu({
@@ -63,6 +65,7 @@ function SongCardWithMenu({
   icon,
   showReorderHandle,
   onGrabStart,
+  muted,
 }: SongCardWithMenuProps) {
   const resolvedDurationMs = useMemo(() => {
     if (durationMs !== undefined) return durationMs;
@@ -157,6 +160,7 @@ function SongCardWithMenu({
       artistList={artistList}
       coverUrl={coverUrl}
       className={className}
+      muted={muted}
       onPlay={onPlay}
       onDoubleClick={handleDoubleClick}
       duration={duration}
@@ -174,10 +178,19 @@ function SongCardWithMenu({
       compact={compact}
       icon={icon}
       actions={id && (!searchType || searchType === "track") ? (
-        <OfflineDownloadButton compact tracks={[{
-          id, title, artists, artistId, artistList, coverUrl,
-          durationMs: resolvedDurationMs, explicit, playCount: 0,
-        }]} />
+        <>
+          <OfflineDownloadButton compact tracks={[{
+            id, title, artists, artistId, artistList, coverUrl,
+            durationMs: resolvedDurationMs, explicit, playCount: 0,
+          }]} />
+          <TrackDislikeButton
+            id={id}
+            title={title}
+            artists={artists}
+            coverUrl={coverUrl}
+            durationMs={resolvedDurationMs}
+          />
+        </>
       ) : undefined}
       showReorderHandle={showReorderHandle}
       onGrabStart={onGrabStart}

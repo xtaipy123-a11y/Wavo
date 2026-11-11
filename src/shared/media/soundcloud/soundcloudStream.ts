@@ -72,6 +72,45 @@ async function openTranscoding(
   return { ...format, blob: new Blob([bytes], { type: format.mimeType }), expiresAt: null, contentLength: bytes.byteLength };
 }
 
+export interface SoundCloudTrackMetadata {
+  id: string;
+  title: string;
+  artist: string;
+  durationMs: number;
+  coverUrl?: string;
+  album?: string;
+  releaseDate?: string;
+  explicit?: boolean;
+}
+
+const metadataCache = new Map<string, { value: SoundCloudTrackMetadata; at: number }>();
+const METADATA_TTL_MS = 10 * 60_000;
+
+export async function resolveSoundCloudTrack(
+  trackId: string,
+  options: SoundCloudRequestOptions = {},
+): Promise<SoundCloudTrackMetadata> {
+  const soundCloudId = toSoundCloudTrackId(trackId);
+  if (!soundCloudId) throw new SoundCloudUnavailableError("not_found");
+  const cached = metadataCache.get(soundCloudId);
+  if (cached && Date.now() - cached.at < METADATA_TTL_MS) return cached.value;
+
+  const track = await lookupTrack(soundCloudId, options);
+  if (!track.title) throw new SoundCloudUnavailableError("not_found");
+  const value: SoundCloudTrackMetadata = {
+    id: `sc:${track.id}`,
+    title: track.title,
+    artist: track.artist ?? "",
+    durationMs: track.fullDurationMs ?? track.durationMs ?? 0,
+    ...(track.artworkUrl ? { coverUrl: track.artworkUrl } : {}),
+    ...(track.releaseTitle ? { album: track.releaseTitle } : {}),
+    ...(track.releaseDate ? { releaseDate: track.releaseDate } : {}),
+    ...(track.explicit ? { explicit: true } : {}),
+  };
+  metadataCache.set(soundCloudId, { value, at: Date.now() });
+  return value;
+}
+
 export async function resolveSoundCloudStream(
   trackId: string,
   options: SoundCloudRequestOptions = {},

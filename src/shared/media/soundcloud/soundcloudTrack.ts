@@ -14,6 +14,12 @@ export interface SoundCloudTrackInfo {
   fullDurationMs?: number;
   trackAuthorization?: string;
   transcodings: SoundCloudTranscoding[];
+  title?: string;
+  artist?: string;
+  artworkUrl?: string;
+  releaseTitle?: string;
+  releaseDate?: string;
+  explicit?: boolean;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -49,6 +55,8 @@ export function parseSoundCloudTrack(raw: unknown): SoundCloudTrackInfo | null {
   if (!isObject(raw) || typeof raw.id !== "number") return null;
   const media = isObject(raw.media) ? raw.media : {};
   const transcodings = Array.isArray(media.transcodings) ? media.transcodings : [];
+  const user = isObject(raw.user) ? raw.user : {};
+  const publisher = isObject(raw.publisher_metadata) ? raw.publisher_metadata : {};
   return {
     id: raw.id,
     policy: (text(raw.policy) ?? "ALLOW").toUpperCase(),
@@ -57,6 +65,12 @@ export function parseSoundCloudTrack(raw: unknown): SoundCloudTrackInfo | null {
     fullDurationMs: positiveNumber(raw.full_duration),
     trackAuthorization: text(raw.track_authorization),
     transcodings: transcodings.map(parseTranscoding).filter((item): item is SoundCloudTranscoding => item !== null),
+    title: text(raw.title)?.trim(),
+    artist: text(publisher.artist)?.trim() || text(user.username)?.trim(),
+    artworkUrl: text(raw.artwork_url)?.replace(/-large(?=\.[a-z]+$)/i, "-t500x500"),
+    releaseTitle: text(publisher.release_title)?.trim(),
+    releaseDate: text(raw.release_date) ?? text(raw.display_date),
+    explicit: raw.explicit === true || publisher.explicit === true,
   };
 }
 

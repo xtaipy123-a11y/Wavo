@@ -7,6 +7,7 @@ export interface DeeplinkTarget {
   type: "artist" | "album" | "playlist" | "track" | "release";
   id: string;
   token?: string;
+  data?: string;
 }
 
 export interface ElectronCacheStats {

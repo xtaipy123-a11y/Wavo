@@ -15,10 +15,11 @@ import {
   useLikedTrackCount,
 } from "../hooks";
 import { HeartFill, AddLine } from "@mingcute/react";
-import { LuDownload } from "react-icons/lu";
+import { LuDownload, LuThumbsDown } from "react-icons/lu";
 import { useTranslation } from "@/languages";
 import { useModalStore } from "../store/modalStore";
 import { useImportStore } from "../store/importStore";
+import { useDislikedTracks } from "../store/dislikeStore";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
 import ImportingPlaylistCard from "./ImportingPlaylistCard";
 
@@ -146,6 +147,83 @@ function LikesPlaylistCard({
   );
 }
 
+function DislikedPlaylistCard({
+  count,
+  onClick,
+  viewMode = "grid",
+}: {
+  count: number;
+  onClick: () => void;
+  viewMode?: LibraryViewMode;
+}) {
+  const { t } = useTranslation();
+  const hasCustomBg = useIsContentTransparent();
+
+  if (viewMode === "list") {
+    return (
+      <div
+        onClick={onClick}
+        className="w-full flex items-center justify-between rounded-md p-[8px] outline-none transition-colors duration-150 ease-out cursor-pointer hover:bg-border-alpha-14 select-none"
+      >
+        <div className="flex items-center gap-[16px] min-w-0">
+          <div
+            className={`relative h-[48px] w-[48px] shrink-0 overflow-hidden rounded-md flex items-center justify-center ${
+              hasCustomBg ? "apple-glass-static" : "bg-bg-panel"
+            }`}
+          >
+            <LuThumbsDown
+              size={24}
+              className={hasCustomBg ? "text-white" : "text-zinc-400 dark:text-zinc-500"}
+            />
+          </div>
+
+          <div className="min-w-0 flex flex-col gap-[2px]">
+            <h3
+              className="m-0 max-w-[min(52vw,560px)] overflow-hidden text-ellipsis whitespace-nowrap text-[16px] leading-[1.2] text-text-primary"
+              style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
+            >
+              {t("library.disliked_songs")}
+            </h3>
+            <p
+              className="m-0 flex min-w-0 items-center text-[15px] leading-[1.2] overflow-hidden text-text-secondary"
+              style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 350 }}
+            >
+              {t("common.songs", { count })}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={onClick}
+      className="group flex flex-col gap-[8px] cursor-pointer"
+      draggable={false}
+    >
+      <div
+        className={`relative aspect-square w-full overflow-hidden rounded-md flex items-center justify-center ${
+          hasCustomBg ? "apple-glass-static" : "bg-bg-panel"
+        }`}
+      >
+        <LuThumbsDown
+          size={52}
+          className={hasCustomBg ? "text-white" : "text-zinc-400 dark:text-zinc-500"}
+        />
+      </div>
+      <div className="flex flex-col gap-[4px]">
+        <span className="truncate text-[14px] font-[500] text-text-primary">
+          {t("library.disliked_songs")}
+        </span>
+        <span className="truncate text-[13px] text-text-tertiary">
+          {t("common.songs", { count })}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function LibraryPage() {
   const navigate = useNavigate();
   const { t, locale } = useTranslation();
@@ -186,6 +264,7 @@ export default function LibraryPage() {
   const { data: externalPlaylistItems = [] } = useExternalItems("playlist");
   const { data: likedCount, isLoading: likedCountLoading } =
     useLikedTrackCount();
+  const dislikedTracks = useDislikedTracks();
   const openCreatePlaylist = useModalStore((state) => state.openCreatePlaylist);
   const hasCustomBg = useIsContentTransparent();
 
@@ -428,6 +507,14 @@ export default function LibraryPage() {
                             viewMode={viewMode}
                             onClick={() =>
                               navigate("/library/playlist?id=likes")
+                            }
+                          />,
+                          <DislikedPlaylistCard
+                            key="disliked-playlist-card"
+                            count={dislikedTracks.length}
+                            viewMode={viewMode}
+                            onClick={() =>
+                              navigate("/library/playlist?id=disliked")
                             }
                           />,
                           ...(isImporting && importJob

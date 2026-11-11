@@ -22,6 +22,7 @@ export interface ClientImportOutcome {
   approvedTracks: Track[];
   reviewItems: ImportReview[];
   result: ImportResult;
+  dislikedTrackIds: string[];
 }
 
 export interface RunImportOptions {
@@ -33,8 +34,12 @@ function newId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
+function canonicalTrackId(source: ImportSource, track: ClientImportedTrack): string {
+  return source === "soundcloud" && !track.sourceId.startsWith("sc:") ? `sc:${track.sourceId}` : track.sourceId;
+}
+
 function canonicalTrack(source: ImportSource, track: ClientImportedTrack): Track {
-  const id = source === "soundcloud" && !track.sourceId.startsWith("sc:") ? `sc:${track.sourceId}` : track.sourceId;
+  const id = canonicalTrackId(source, track);
   return {
     id,
     title: track.title,
@@ -100,10 +105,13 @@ async function matchPlaylist(playlist: ClientImportedPlaylist, options: RunImpor
   });
 
   const approvedTracks = outcomes.flatMap((outcome) => (outcome.status === "approved" ? [outcome.track] : []));
+  const dislikedTrackIds = outcomes.flatMap((outcome, index) =>
+    outcome.status === "approved" && playlist.tracks[index]?.disliked ? [outcome.track.id] : [],
+  );
   const reviewItems = outcomes
     .map((outcome, index) => reviewItem(playlist.tracks[index], index, outcome))
     .filter((item): item is ImportReview => Boolean(item));
-  return { source: playlist.source, ...header, approvedTracks, reviewItems, result };
+  return { source: playlist.source, ...header, approvedTracks, reviewItems, result, dislikedTrackIds };
 }
 
 export async function runClientImport(url: string, options: RunImportOptions = {}): Promise<ClientImportOutcome> {
@@ -121,6 +129,9 @@ export async function runClientImport(url: string, options: RunImportOptions = {
       approvedTracks: playlist.tracks.map((track) => canonicalTrack(playlist.source, track)),
       reviewItems: [],
       result: { total, imported: total, skipped: 0 },
+      dislikedTrackIds: playlist.tracks
+        .filter((track) => track.disliked)
+        .map((track) => canonicalTrackId(playlist.source, track)),
     };
   }
   options.onProgress?.({

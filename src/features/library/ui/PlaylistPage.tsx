@@ -14,9 +14,10 @@ import {
   CheckLine,
   ArrowLeftLine,
   ShareForwardLine,
+  LinkLine,
 } from "@mingcute/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { LuPencil, LuTrash2, LuText, LuShuffle, LuRepeat } from "react-icons/lu";
+import { LuPencil, LuTrash2, LuText, LuShuffle, LuRepeat, LuThumbsDown } from "react-icons/lu";
 import Button from "@/shared/ui/Button";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
@@ -24,6 +25,7 @@ import { OfflineDownloadButton } from "@/features/downloads/OfflineDownloadButto
 import CoverImage from "@/features/covers/ui/CoverImage";
 import PlaylistSuggestions from "./PlaylistSuggestions";
 import { useModalStore } from "../store/modalStore";
+import { useDislikedTracks } from "../store/dislikeStore";
 import {
   usePlaylist,
   useLikedTracks,
@@ -35,6 +37,7 @@ import { usePlayerStore } from "@/features/player/store/playerStore";
 import type { Track } from "@/shared/types";
 import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
+import { buildPlaylistShareLink, toShareTrack } from "../services/playlistShare";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
 
 interface TrackItemProps {
@@ -46,6 +49,8 @@ interface TrackItemProps {
   style?: React.CSSProperties;
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  contextOverride?: string;
+  isDisliked?: boolean;
 }
 
 const TrackItem = memo(function TrackItem({
@@ -57,17 +62,20 @@ const TrackItem = memo(function TrackItem({
   style,
   showReorderHandle,
   onGrabStart,
+  contextOverride,
+  isDisliked,
 }: TrackItemProps) {
   const handlePlay = useCallback(() => {
     if (typeof window !== "undefined" && window.__wavoWasDragging) return;
-    const context = playlistId ? `playlist:${playlistId}` : playlistTitle;
+    const context =
+      contextOverride ?? (playlistId ? `playlist:${playlistId}` : playlistTitle);
     playerEngine.playTrack(
       track,
       allTracks,
       context,
       playlistCoverUrl,
     );
-  }, [track, allTracks, playlistId, playlistTitle, playlistCoverUrl]);
+  }, [track, allTracks, playlistId, playlistTitle, playlistCoverUrl, contextOverride]);
 
   return (
     <div style={style} data-reorder-item>
@@ -83,6 +91,7 @@ const TrackItem = memo(function TrackItem({
         playlistTitle={playlistTitle}
         showReorderHandle={showReorderHandle}
         onGrabStart={onGrabStart}
+        muted={isDisliked}
         duration={
           track.durationMs
             ? `${Math.floor(track.durationMs / 60000)}:${String(
@@ -103,10 +112,17 @@ function LibraryPlaylistContent() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
   const isLikesMode = id === "likes";
+  const isDislikedMode = id === "disliked";
+  const isReadOnlyMode = isLikesMode || isDislikedMode;
   const decodedId = id ? decodeURIComponent(id) : null;
   const scrollRef = useRef<HTMLDivElement>(null);
   const { t, locale } = useTranslation();
   const hasCustomBg = useIsContentTransparent();
+  const dislikedTracks = useDislikedTracks();
+  const dislikedIds = useMemo(
+    () => new Set(dislikedTracks.map((track) => track.id)),
+    [dislikedTracks],
+  );
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -118,7 +134,7 @@ function LibraryPlaylistContent() {
     data: playlistDetail,
     isLoading: playlistLoading,
     error: playlistError,
-  } = usePlaylist(isLikesMode ? null : decodedId);
+  } = usePlaylist(isReadOnlyMode ? null : decodedId);
 
   const { data: likesData, isLoading: likesLoading } = useLikedTracks(
     isLikesMode ? { limit: 1000, offset: 0 } : undefined,
@@ -127,6 +143,18 @@ function LibraryPlaylistContent() {
   const isLoading = isLikesMode ? likesLoading : playlistLoading;
 
   const viewData = (() => {
+    if (isDislikedMode) {
+      const tracks: Track[] = dislikedTracks.map((track) => ({ ...track }));
+      return {
+        title: t("library.disliked_songs"),
+        bio: t("library.disliked_songs_description"),
+        countLabel: t("common.tracks", { count: tracks.length }),
+        coverUrl: "",
+        coverUrls: [] as string[],
+        tracks,
+        revision: 0,
+      };
+    }
     if (isLikesMode) {
       if (!likesData) return null;
       const tracks: Track[] = (likesData.tracks ?? []).map((t) => ({
@@ -189,34 +217,45 @@ function LibraryPlaylistContent() {
     setOptimisticTracks(null);
   }, [viewData?.revision, decodedId]);
 
-  const currentTracks = useMemo(() => {
-    return optimisticTracks ?? viewData?.tracks ?? [];
-  }, [optimisticTracks, viewData?.tracks]);
-  const repeatAll = usePlayerStore((state) => state.repeat === "all" && state.playbackContext === (decodedId ? `playlist:${decodedId}` : viewData?.title));
-  const playlistPlaying = usePlayerStore((state) => state.playbackContext === (decodedId ? `playlist:${decodedId}` : viewData?.title) && state.currentTrack !== null);
+  const rawTracks = useMemo(
+    () => optimisticTracks ?? viewData?.tracks ?? [],
+    [optimisticTracks, viewData?.tracks],
+  );
+  // Disliked tracks stay visible in playlists but are greyed out.
+  const currentTracks = rawTracks;
+
+  const playbackContext = isDislikedMode
+    ? "disliked"
+    : decodedId
+      ? `playlist:${decodedId}`
+      : viewData?.title;
+  const repeatAll = usePlayerStore(
+    (state) => state.repeat === "all" && state.playbackContext === playbackContext,
+  );
+  const playlistPlaying = usePlayerStore(
+    (state) => state.playbackContext === playbackContext && state.currentTrack !== null,
+  );
 
   const handlePlayAll = useCallback(() => {
     if (!currentTracks.length || !viewData) return;
-    const context = decodedId ? `playlist:${decodedId}` : viewData.title;
     playerEngine.clearQueue();
     playerEngine.playTrack(
       currentTracks[0],
       currentTracks,
-      context,
+      playbackContext,
       viewData.coverUrl,
     );
-  }, [currentTracks, viewData, decodedId]);
+  }, [currentTracks, viewData, playbackContext]);
 
   const handleShufflePlay = useCallback(() => {
     if (!currentTracks.length || !viewData) return;
-    const context = decodedId ? `playlist:${decodedId}` : viewData.title;
     playerEngine.clearQueue();
     void playerEngine.playShuffled(
       currentTracks,
-      context,
+      playbackContext,
       viewData.coverUrl,
     );
-  }, [currentTracks, viewData, decodedId]);
+  }, [currentTracks, viewData, playbackContext]);
 
   const { toast } = useToast();
   const [addedToQueue, setAddedToQueue] = useState(false);
@@ -241,9 +280,25 @@ function LibraryPlaylistContent() {
     if (decodedId) navigate(`/friends?sharePlaylist=${encodeURIComponent(decodedId)}`);
   }, [decodedId, navigate]);
 
+  const handleShareLink = useCallback(async () => {
+    if (!viewData) return;
+    try {
+      const link = await buildPlaylistShareLink({
+        v: 1,
+        title: viewData.title,
+        ...(viewData.bio ? { description: viewData.bio } : {}),
+        tracks: currentTracks.map((track) => toShareTrack(track, dislikedIds.has(track.id))),
+      });
+      await navigator.clipboard.writeText(link);
+      toast(t("playlist.share_link_copied"), "checkmark", { description: viewData.title });
+    } catch {
+      toast(t("playlist.share_link_failed"), "error");
+    }
+  }, [currentTracks, dislikedIds, t, toast, viewData]);
+
   const handleReorderCommit = useCallback(
     (fromIndex: number, toIndex: number, movingTrack: Track) => {
-      if (!decodedId || !viewData || isLikesMode) return;
+      if (!decodedId || !viewData || isReadOnlyMode) return;
       if (fromIndex === toIndex || !movingTrack.playlistItemId) return;
 
       const nextList = [...currentTracks];
@@ -262,7 +317,7 @@ function LibraryPlaylistContent() {
         revision: viewData.revision,
       });
     },
-    [currentTracks, decodedId, isLikesMode, reorderTracks, viewData],
+    [currentTracks, decodedId, isReadOnlyMode, reorderTracks, viewData],
   );
 
   const {
@@ -489,7 +544,9 @@ function LibraryPlaylistContent() {
                       viewData.coverUrls ??
                       (viewData.coverUrl ? [viewData.coverUrl] : []);
                     if (urls.length === 0) {
-                      return isLikesMode ? (
+                      return isDislikedMode ? (
+                        <LuThumbsDown size={48} className={hasCustomBg ? "text-white" : "text-zinc-400 dark:text-zinc-500"} />
+                      ) : isLikesMode ? (
                         <HeartFill size={48} className={hasCustomBg ? "text-white" : "text-zinc-400 dark:text-zinc-500"} />
                       ) : (
                         <PlaylistFill size={48} className={hasCustomBg ? "text-white" : "text-border-alpha-33"} />
@@ -537,11 +594,11 @@ function LibraryPlaylistContent() {
                   <h1
                     ref={titleRef}
                     className={`${SIDEBAR_TITLE_CLASS} ${
-                      isLikesMode
+                      isReadOnlyMode
                         ? ""
                         : "cursor-text outline-none transition-colors"
                     } ${isEditingTitle ? "bg-border-alpha-14 rounded-[4px] -ml-[4px] px-[4px]" : ""}`}
-                      contentEditable={isLikesMode ? false : isEditingTitle}
+                      contentEditable={isReadOnlyMode ? false : isEditingTitle}
                       suppressContentEditableWarning
                       onBlur={(e) => {
                         if (!isEditingTitle) return;
@@ -567,14 +624,14 @@ function LibraryPlaylistContent() {
                         }
                       }}
                       onClick={() => {
-                        if (!isLikesMode) setIsEditingTitle(true);
+                        if (!isReadOnlyMode) setIsEditingTitle(true);
                       }}
                     >
                       {viewData.title}
                     </h1>
                   }
                   subtitle={
-                    isLikesMode ? undefined : viewData.bio || isEditingDescription ? (
+                    isReadOnlyMode ? undefined : viewData.bio || isEditingDescription ? (
                       <p
                         ref={descriptionRef}
                         className={`${SIDEBAR_SUBTITLE_CLASS} cursor-text outline-none transition-colors empty:min-h-[21px] ${
@@ -637,7 +694,7 @@ function LibraryPlaylistContent() {
                         />
                         <span>
                           {(() => {
-                            const totalMs = viewData.tracks.reduce(
+                            const totalMs = currentTracks.reduce(
                               (acc, t) => acc + (t.durationMs || 0),
                               0,
                             );
@@ -666,6 +723,7 @@ function LibraryPlaylistContent() {
                       </Button>
 
                       <div className="flex items-center gap-[8px] w-full">
+                        {!isDislikedMode && (
                         <Button
                           variant={hasCustomBg ? "glass-action" : "outline"}
                           onClick={handleAddToQueue}
@@ -700,6 +758,7 @@ function LibraryPlaylistContent() {
                           </AnimatePresence>
                           <span className="truncate">{t("common.add_to_queue")}</span>
                         </Button>
+                        )}
 
                         <Button
                           variant={hasCustomBg ? "glass-action" : "outline"}
@@ -723,7 +782,7 @@ function LibraryPlaylistContent() {
                           className={`!h-[36px] !w-[36px] shrink-0 !p-0 flex items-center justify-center ${repeatAll ? "!text-accent" : "text-text-primary"}`}
                         ><LuRepeat size={16} /></Button>
 
-                        {!isLikesMode && (
+                        {!isReadOnlyMode && (
                           <DropdownMenu
                             trigger={
                               <Button
@@ -747,12 +806,18 @@ function LibraryPlaylistContent() {
                                 label: t("common.edit_description"),
                                 onClick: () => setIsEditingDescription(true),
                               },
-                              ...[{
+                              {
+                                id: "share-link",
+                                icon: <LinkLine size={15} />,
+                                label: t("playlist.share_link"),
+                                onClick: () => void handleShareLink(),
+                              },
+                              {
                                 id: "share",
                                 icon: <ShareForwardLine size={15} />,
-                                label: t("common.share"),
+                                label: t("playlist.share_chat"),
                                 onClick: handleShare,
-                              }],
+                              },
                               {
                                 id: "delete",
                                 icon: <LuTrash2 size={15} />,
@@ -851,7 +916,7 @@ function LibraryPlaylistContent() {
                   }
 
                   const canReorder = Boolean(
-                    !isLikesMode && decodedId && track.playlistItemId,
+                    !isReadOnlyMode && decodedId && track.playlistItemId,
                   );
 
                   return (
@@ -860,10 +925,12 @@ function LibraryPlaylistContent() {
                         track.playlistItemId ?? `${track.id}-${index}`
                       }
                       track={track}
-                      playlistId={isLikesMode ? undefined : (decodedId ?? undefined)}
+                      playlistId={isReadOnlyMode ? undefined : (decodedId ?? undefined)}
                       playlistTitle={viewData.title}
                       playlistCoverUrl={viewData.coverUrl}
                       allTracks={currentTracks}
+                      contextOverride={isDislikedMode ? "disliked" : undefined}
+                      isDisliked={!isDislikedMode && dislikedIds.has(track.id)}
                       showReorderHandle={canReorder}
                       onGrabStart={
                         canReorder && !isDragging
@@ -889,7 +956,7 @@ function LibraryPlaylistContent() {
               </div>
               )}
 
-              {!isLikesMode && decodedId && currentTracks.length > 0 && (
+              {!isReadOnlyMode && decodedId && currentTracks.length > 0 && (
                 <PlaylistSuggestions key={decodedId} playlistId={decodedId} tracks={currentTracks} />
               )}
 
@@ -908,7 +975,7 @@ function LibraryPlaylistContent() {
                     artistId={draggedItem.artistId}
                     artistList={draggedItem.artistList}
                     coverUrl={draggedItem.coverUrl || viewData.coverUrl}
-                    playlistId={isLikesMode ? undefined : (decodedId ?? undefined)}
+                    playlistId={isReadOnlyMode ? undefined : (decodedId ?? undefined)}
                     playlistItemId={draggedItem.playlistItemId}
                     playlistTitle={viewData.title}
                     duration={

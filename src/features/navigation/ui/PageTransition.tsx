@@ -8,7 +8,11 @@ interface PageTransitionProps {
 function TransitionContent({ children }: PageTransitionProps) {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
-  const currentKey = `${pathname}?${searchParams.toString()}`;
+  // The friends page stores in-page state (open chat, draft, attached playlist)
+  // in component state and only uses query params to describe a share target.
+  // Re-keying it on query changes would unmount the page and close the chat.
+  const keepsStateAcrossSearch = pathname === "/friends";
+  const currentKey = keepsStateAcrossSearch ? pathname : `${pathname}?${searchParams.toString()}`;
   const shellKeyRef = useRef(currentKey);
   if (pathname !== "/player") {
     shellKeyRef.current = currentKey;

@@ -3,23 +3,30 @@ import { createPortal } from "react-dom";
 import { LuEllipsis } from "react-icons/lu";
 import { useTranslation } from "@/languages";
 import { SpeedPitchPicker } from "./SpeedPitchPicker";
+import { SleepTimerPanel } from "./SleepTimerPanel";
+import { LyricsOptionsPanel } from "./LyricsOptionsPanel";
 
 interface PlayerOptionsMenuProps {
   className?: string;
+  trackId?: string | null;
   artworkSize: number;
   preferredArtworkSize?: number;
   onArtworkSizeChange?: (size: number) => void;
+  onEditWordTiming?: () => void;
 }
 
 export function PlayerOptionsMenu({
   className = "",
+  trackId,
   artworkSize,
   preferredArtworkSize,
   onArtworkSizeChange,
+  onEditWordTiming,
 }: PlayerOptionsMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [style, setStyle] = useState<CSSProperties>({ width: 300 });
+  const [openSection, setOpenSection] = useState<"lyrics" | "sleep" | "speed" | null>(null);
+  const [style, setStyle] = useState<CSSProperties>({ width: 280 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -34,17 +41,14 @@ export function PlayerOptionsMenu({
       const rect = trigger.getBoundingClientRect();
       const margin = 12;
       const gap = 8;
-      const width = Math.min(300, window.innerWidth - margin * 2);
-      const below = window.innerHeight - rect.bottom;
-      const above = rect.top;
-      const opensBelow = below >= panel.scrollHeight + gap + margin || below > above;
-      const maxHeight = Math.max(0, (opensBelow ? below : above) - gap - margin);
+      const width = Math.min(280, window.innerWidth - margin * 2);
+      const maxHeight = Math.max(0, rect.top - gap - margin);
       const height = Math.min(panel.scrollHeight, maxHeight);
       setStyle({
         width,
         maxHeight,
         left: Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin)),
-        top: Math.max(margin, opensBelow ? rect.bottom + gap : rect.top - gap - height),
+        top: Math.max(margin, rect.top - gap - height),
       });
     };
     updatePosition();
@@ -100,7 +104,10 @@ export function PlayerOptionsMenu({
         aria-controls={open ? panelId : undefined}
         data-no-window-drag
         className={`${className} ${open ? "!bg-white/15 !opacity-100" : ""}`}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setOpen((value) => !value);
+          setOpenSection(null);
+        }}
       >
         <LuEllipsis size={20} aria-hidden="true" />
       </button>
@@ -113,14 +120,16 @@ export function PlayerOptionsMenu({
           data-theme="dark"
           data-dropdown-menu="true"
           data-no-window-drag
-          className="dark fixed z-[1000] overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-[#1c1c1e]/95 p-3 text-text-primary shadow-2xl backdrop-blur-2xl"
+          className="dark fixed z-[1000] overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-[#1c1c1e]/95 p-2 text-text-primary shadow-2xl backdrop-blur-2xl"
           style={style}
         >
           {onArtworkSizeChange && (
-            <div className="mb-3 flex flex-col gap-2 border-b border-white/10 pb-3">
+            <div className="mb-1.5 flex flex-col gap-1.5 border-b border-white/[0.08] px-0.5 pb-2">
               <div className="flex items-center justify-between gap-3 text-[12px] font-medium">
                 <label htmlFor={artworkId}>{t("player.artwork_size")}</label>
-                <span className="tabular-nums text-text-secondary">{preferredArtworkSize ?? artworkSize} px</span>
+                <span className="tabular-nums text-[11px] font-normal text-text-secondary">
+                  {preferredArtworkSize ?? artworkSize} px
+                </span>
               </div>
               <input
                 id={artworkId}
@@ -135,7 +144,36 @@ export function PlayerOptionsMenu({
               />
             </div>
           )}
-          <SpeedPitchPicker />
+          <LyricsOptionsPanel
+            trackId={trackId}
+            collapsible
+            expanded={openSection === "lyrics"}
+            onToggle={() =>
+              setOpenSection((current) => (current === "lyrics" ? null : "lyrics"))
+            }
+            onEditWordTiming={
+              onEditWordTiming
+                ? () => {
+                    onEditWordTiming();
+                    setOpen(false);
+                  }
+                : undefined
+            }
+          />
+          <SleepTimerPanel
+            collapsible
+            expanded={openSection === "sleep"}
+            onToggle={() =>
+              setOpenSection((current) => (current === "sleep" ? null : "sleep"))
+            }
+          />
+          <SpeedPitchPicker
+            collapsible
+            expanded={openSection === "speed"}
+            onToggle={() =>
+              setOpenSection((current) => (current === "speed" ? null : "speed"))
+            }
+          />
         </div>,
         document.body,
       )}

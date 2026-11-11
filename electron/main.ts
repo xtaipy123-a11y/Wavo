@@ -38,6 +38,7 @@ import { BundleManager } from "./bundle-manager.js";
 import { createSleepBlocker } from "./sleep-blocker.js";
 import { DiscordPresence } from "./discord-presence.js";
 import { createGlobalShortcutRegistry } from "./global-shortcuts.js";
+import { applyBrandingIcon } from "./branding-icon.js";
 import { DEFAULT_SHORTCUTS, getShortcutActivationScope, type ShortcutsSettings, type ShortcutRegistrationResult } from "../src/features/shortcuts/types";
 
 // root error handling for main process
@@ -455,6 +456,12 @@ if (!gotTheLock) {
           mainWindow.setIcon(icon);
           if (process.platform === "darwin" && app.dock) {
             app.dock.setIcon(icon);
+          }
+          if (process.platform === "win32") {
+            const png = icon.resize({ width: 256, height: 256, quality: "best" }).toPNG();
+            await applyBrandingIcon(png).catch((err) => {
+              console.error("\x1b[41;37m icon \x1b[0m shortcut sync error:", err);
+            });
           }
         }
       } catch (err) {

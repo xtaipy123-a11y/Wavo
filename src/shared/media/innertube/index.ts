@@ -1,4 +1,4 @@
-export { innertubeCatalog, type RadioOptions } from "./innertubeCatalog";
+export { innertubeCatalog, type RadioOptions, type HomeShelf, type MoodCategory } from "./innertubeCatalog";
 export {
   resolveDirectAudioStream,
   toVideoId,
@@ -7,6 +7,6 @@ export {
 } from "./innertubeAudio";
 export { postInnertube, InnertubeError, USER_AGENT_HEADER_OVERRIDE } from "./innertubeClient";
 export { searchRaw, searchCatalog, type InnertubeSearchFilter } from "./innertubeSearch";
-export { videoThumbnailCover } from "./innertubeThumbnail";
+export { videoThumbnailCover, toSquareArtworkUrl, toCardArtworkUrl } from "./innertubeThumbnail";
 export { downloadAudioBytes, isGoogleVideoUrl, type AudioDownloadOptions } from "./chunkedAudioDownload";
 export * from "./innertubeMappers";

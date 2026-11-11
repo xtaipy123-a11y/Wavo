@@ -3,18 +3,18 @@ import AppImage from "@/features/covers/ui/AppImage";
 import { Link, useLocation } from "react-router-dom";
 import { sidebarNavItems } from "../data/navigation";
 import logo from "@/assets/logo.png";
-import spotifyLogo from "@/assets/branding/logo-spotify.svg";
-import discordLogo from "@/assets/branding/logo-discord.svg";
-import telegramLogo from "@/assets/branding/logo-telegram.svg";
-import auroraLogo from "@/assets/branding/logo-aurora.svg";
-import sunsetLogo from "@/assets/branding/logo-sunset.svg";
-import oceanLogo from "@/assets/branding/logo-ocean.svg";
-import forestLogo from "@/assets/branding/logo-forest.svg";
-import berryLogo from "@/assets/branding/logo-berry.svg";
-import carbonLogo from "@/assets/branding/logo-carbon.svg";
-import pixelLogo from "@/assets/branding/logo-pixel.svg";
-import scanlinesLogo from "@/assets/branding/logo-scanlines.svg";
-import vhsLogo from "@/assets/branding/logo-vhs.svg";
+import spotifyLogo from "@/assets/branding/logo-spotify.png";
+import discordLogo from "@/assets/branding/logo-discord.png";
+import telegramLogo from "@/assets/branding/logo-telegram.png";
+import auroraLogo from "@/assets/branding/logo-aurora.png";
+import sunsetLogo from "@/assets/branding/logo-sunset.png";
+import oceanLogo from "@/assets/branding/logo-ocean.png";
+import forestLogo from "@/assets/branding/logo-forest.png";
+import berryLogo from "@/assets/branding/logo-berry.png";
+import carbonLogo from "@/assets/branding/logo-carbon.png";
+import pixelLogo from "@/assets/branding/logo-pixel.png";
+import scanlinesLogo from "@/assets/branding/logo-scanlines.png";
+import vhsLogo from "@/assets/branding/logo-vhs.png";
 import { useTranslation } from "@/languages";
 import { useTheme } from "next-themes";
 import { Capacitor } from "@capacitor/core";
@@ -209,9 +209,7 @@ function Sidebar({ searchOpen, onSearchToggle }: SidebarProps) {
             height={34}
             className={
               "w-[34px] h-[34px] " +
-              (accentVariant === "carbon" ||
-              accentVariant === "pixel" ||
-              accentVariant === "scanlines"
+              (accentVariant === "carbon"
                 ? "theme-logo invert dark:invert-0"
                 : "")
             }

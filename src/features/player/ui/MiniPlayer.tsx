@@ -41,7 +41,8 @@ import { useCoverReady, CoverImage } from "@/features/covers";
 import { useCustomizationStore, getBlockStyle } from "@/features/settings";
 import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import { ArtistLink } from "@/features/artist";
-import { LuTimer } from "react-icons/lu";
+import { LuSparkles, LuTimer } from "react-icons/lu";
+import { SleepTimerPanel } from "./SleepTimerPanel";
 
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
@@ -647,24 +648,10 @@ function MiniPlayer({
             initial={{ opacity: 0, y: 8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.97 }}
-            className="absolute bottom-[74px] right-[95px] z-[95] w-[218px] rounded-xl border border-border-primary/50 bg-bg-primary p-[10px] shadow-2xl prevent-seek"
+            className="absolute bottom-[74px] right-[95px] z-[95] w-[248px] rounded-xl border border-border-primary/50 bg-bg-primary p-[10px] shadow-2xl prevent-seek"
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <div className="px-2 pb-2 text-[13px] font-semibold text-text-primary">{t("player.sleep_timer")}</div>
-            {sleepTimerActive && (
-              <div className="mb-2 rounded-lg bg-border-alpha-14 px-2 py-1.5 text-[12px] text-text-secondary">
-                {player.sleepAfterTrackId ? t("player.sleep_after_track") : t("player.sleep_remaining", { minutes: sleepRemainingMinutes ?? 0 })}
-              </div>
-            )}
-            {[15, 30, 45, 60].map((minutes) => (
-              <button key={minutes} type="button" className="flex w-full rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-[12px] text-text-primary hover:bg-border-alpha-14 cursor-pointer" onClick={() => { playerEngine.setSleepTimerMinutes(minutes); setSleepOpen(false); }}>
-                {t("player.sleep_in_minutes", { minutes })}
-              </button>
-            ))}
-            <button type="button" disabled={!player.currentTrack} className="flex w-full rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-[12px] text-text-primary hover:bg-border-alpha-14 cursor-pointer disabled:opacity-40" onClick={() => { playerEngine.sleepAfterCurrentTrack(); setSleepOpen(false); }}>
-              {t("player.sleep_after_track")}
-            </button>
-            {sleepTimerActive && <button type="button" className="mt-1 flex w-full rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-[12px] text-red-400 hover:bg-red-500/10 cursor-pointer" onClick={() => { playerEngine.cancelSleepTimer(); setSleepOpen(false); }}>{t("player.sleep_cancel")}</button>}
+            <SleepTimerPanel onAction={() => setSleepOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -864,14 +851,24 @@ function MiniPlayer({
               <button
                 type="button"
                 aria-label="Shuffle"
-                title={player.shuffle ? t("player.shuffle_on") : t("player.shuffle_off")}
-                className={`${iconButtonClass} ${
+                aria-pressed={player.shuffle}
+                title={
+                  player.shuffle && player.smartShuffle
+                    ? t("player.shuffle_smart_on")
+                    : player.shuffle
+                      ? t("player.shuffle_on")
+                      : t("player.shuffle_off")
+                }
+                className={`${iconButtonClass} relative ${
                   player.shuffle ? "bg-bg-toolbox-active text-text-primary" : ""
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => playerEngine.setShuffle(!player.shuffle)}
+                onClick={() => playerEngine.cycleShuffle()}
               >
                 <Shuffle size={18} weight={player.shuffle ? "Bold" : "Outline"} />
+                {player.shuffle && player.smartShuffle && (
+                  <LuSparkles className="absolute -right-[1px] -top-[1px]" size={9} aria-hidden="true" />
+                )}
               </button>
               <button
                 type="button"

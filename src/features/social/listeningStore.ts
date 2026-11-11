@@ -104,11 +104,74 @@ export const useListeningStore = create<ListeningState>((set, get) => ({
   reset: () => { refreshSequence += 1; set({ room: null, members: [], invitations: [], error: "" }); },
 }));
 
-export function expectedListeningPosition(room: ListeningRoom, now = Date.now()): number {
-  const elapsed = room.is_playing ? Math.max(0, Math.min(12_000, now - Date.parse(room.updated_at))) : 0;
-  return Math.max(0, Math.round(room.position_ms + elapsed));
+/**
+ * Snapshot of the host playback that guests extrapolate from. `serverAt` is the
+ * host's row timestamp in server time; the guest's clock offset is applied when
+ * the expected position is computed so skewed device clocks do not matter.
+ */
+export interface ListeningPlaybackAnchor {
+  trackId: string | null;
+  positionMs: number;
+  isPlaying: boolean;
+  serverAt: number;
+  signature: string;
 }
 
-export function isListeningRoomFresh(room: ListeningRoom, now = Date.now()): boolean {
-  return !room.is_playing || now - Date.parse(room.updated_at) <= 12_000;
+function playbackSignature(room: ListeningRoom): string {
+  return `${room.track_id ?? ""}|${room.is_playing ? 1 : 0}|${room.position_ms}`;
+}
+
+export function advanceListeningAnchor(
+  anchor: ListeningPlaybackAnchor | null,
+  room: ListeningRoom,
+): ListeningPlaybackAnchor {
+  const signature = playbackSignature(room);
+  if (anchor?.signature === signature) return anchor;
+  return {
+    trackId: room.track_id,
+    positionMs: Math.max(0, room.position_ms),
+    isPlaying: room.is_playing,
+    serverAt: Date.parse(room.updated_at),
+    signature,
+  };
+}
+
+/**
+ * Estimates how far the server clock is ahead of this device (server - local).
+ * Realtime delivery is faster than polling, so the largest sample carries the
+ * least latency and is the closest estimate.
+ */
+export function estimateListeningClockSkew(
+  room: ListeningRoom,
+  receivedAt: number,
+  previous: number | null,
+): number {
+  const serverAt = Date.parse(room.updated_at);
+  if (!Number.isFinite(serverAt)) return previous ?? 0;
+  const sample = serverAt - receivedAt;
+  return previous === null ? sample : Math.max(previous, sample);
+}
+
+export function expectedAnchorPosition(
+  anchor: ListeningPlaybackAnchor | null,
+  clockSkewMs: number,
+  now = Date.now(),
+): number {
+  if (!anchor) return 0;
+  const elapsed = anchor.isPlaying && Number.isFinite(anchor.serverAt)
+    ? Math.max(0, now - (anchor.serverAt - clockSkewMs))
+    : 0;
+  return Math.max(0, Math.round(anchor.positionMs + elapsed));
+}
+
+export function isListeningAnchorFresh(
+  anchor: ListeningPlaybackAnchor | null,
+  clockSkewMs: number,
+  now = Date.now(),
+  maxAgeMs = 12_000,
+): boolean {
+  if (!anchor) return false;
+  if (!anchor.isPlaying) return true;
+  if (!Number.isFinite(anchor.serverAt)) return false;
+  return now - (anchor.serverAt - clockSkewMs) <= maxAgeMs;
 }

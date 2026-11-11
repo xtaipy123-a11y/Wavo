@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LuArrowLeft, LuArrowUpRight, LuCheck, LuDownload, LuHeadphones, LuMessageCircle, LuMusic2, LuPaperclip, LuSearch, LuSend, LuUserPlus, LuUsers, LuX } from "react-icons/lu";
-import { api } from "@/shared/api";
+import { api, toClientTrack } from "@/shared/api";
+import { getDislikeOwnerId, getDislikedTrackIds, useDislikeStore } from "@/features/library/store/dislikeStore";
 import { getSupabaseClient } from "@/shared/supabase/client";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useToast } from "@/shared/ui";
@@ -10,7 +11,6 @@ import { parseSharedPlaylist, socialClient, type Friendship, type SocialMessage,
 import ListeningPanel from "./ListeningPanel";
 import { privateMusic } from "@/features/uploads/privateMusic";
 import { getFriendVisibility, listFriendActivity, setFriendVisibility, type FriendActivity } from "@/features/cloud/friendActivity";
-import { CollaborativePanel } from "@/features/cloud/CollaborativePanel";
 import "./SocialLayout.css";
 
 const copy = {
@@ -198,15 +198,24 @@ export default function FriendsPage() {
       let playlist;
       if (sharePlaylistId) {
         const detail = await api.getUserPlaylist(sharePlaylistId);
+        const disliked = getDislikedTrackIds();
         playlist = parseSharedPlaylist({
           title: detail.playlist.title,
           description: detail.playlist.description,
-          tracks: detail.items.map((item) => item.track),
+          tracks: detail.items.map((item) => ({
+            ...item.track,
+            ...(disliked.has(item.track.id) ? { disliked: true } : {}),
+          })),
         });
         if (!playlist) throw new Error("Die Playlist ist zu groß oder enthält ungültige Titel.");
       } else if (shareCollectionType && shareCollectionId) {
         const collection = shareCollectionType === "album" ? await api.getAlbum(shareCollectionId) : await api.getPlaylist(shareCollectionId);
-        playlist = parseSharedPlaylist({ title: collection.title, tracks: collection.tracks,
+        const disliked = getDislikedTrackIds();
+        playlist = parseSharedPlaylist({ title: collection.title,
+          tracks: collection.tracks.map((track) => ({
+            ...track,
+            ...(disliked.has(track.id) ? { disliked: true } : {}),
+          })),
           source: { type: shareCollectionType, id: shareCollectionId } });
         if (!playlist) throw new Error("Diese Sammlung kann nicht geteilt werden.");
       }
@@ -225,7 +234,22 @@ export default function FriendsPage() {
     if (!snapshot) { setError("Invalid playlist snapshot."); return; }
     await act(async () => {
       const created = await api.createPlaylist({ title: snapshot.title, description: snapshot.description });
-      await api.addPlaylistTrackSnapshots(created.id, snapshot.tracks);
+      const sharedTracks = snapshot.tracks.map((track) => ({
+        id: track.id,
+        title: track.title,
+        artists: track.artists,
+        durationMs: track.durationMs,
+        ...(track.cover ? { cover: track.cover } : {}),
+        ...(track.album ? { album: track.album } : {}),
+        ...(track.explicit !== undefined ? { explicit: track.explicit } : {}),
+      }));
+      await api.addPlaylistTrackSnapshots(created.id, sharedTracks);
+      const disliked = snapshot.tracks.filter((track) => track.disliked);
+      if (disliked.length > 0) {
+        const ownerId = getDislikeOwnerId();
+        const store = useDislikeStore.getState();
+        for (const track of disliked) store.addDislike(ownerId, toClientTrack(track));
+      }
       window.dispatchEvent(new Event("library:changed"));
       toast(c.imported, "checkmark", { description: snapshot.title });
     });
@@ -256,7 +280,6 @@ export default function FriendsPage() {
         {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{error}</div>}
         <div className="wavo-social-features">
           <ListeningPanel friends={accepted.map((row) => { const id = personId(row); return { id, profile: profiles[id] }; })} />
-          <CollaborativePanel friends={accepted.map((row) => { const id = personId(row); return { id, name: profiles[id]?.display_name ?? "Wavo" }; })} />
         </div>
         <div className="wavo-social-layout" data-chat-open={chatIsOpen}>
           <aside className="wavo-social-people">
@@ -264,11 +287,11 @@ export default function FriendsPage() {
             <label className="wavo-friend-search">
               <LuSearch size={16} /><input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={c.search} aria-label={c.search} />
             </label>
-            {search.trim() && <div className="mt-[14px]"><p className="mb-[7px] text-[11px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.search}</p>{searching ? <p role="status" className="text-[12px] text-text-secondary">{c.searching}</p> : results.length ? results.map((person) => <div key={person.user_id} className="flex items-center gap-[9px] rounded-[9px] px-[5px] py-[8px]"><Avatar profile={person} /><div className="min-w-0 flex-1"><p className="m-0 truncate text-[13px] font-semibold">{person.display_name}</p><p className="m-0 truncate text-[11px] text-text-tertiary">@{person.username}</p></div><button type="button" disabled={busy || existingIds.has(person.user_id)} onClick={() => void act(() => socialClient.requestFriend(person.user_id))} aria-label={`${c.add}: ${person.username}`} title={existingIds.has(person.user_id) ? c.pending : c.add} className="rounded-[8px] p-[7px] text-text-secondary hover:bg-white/10 disabled:opacity-35"><LuUserPlus size={17} /></button></div>) : <p className="text-[12px] text-text-tertiary">{c.searchEmpty}</p>}</div>}
-            {incoming.length > 0 && <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.requests} · {incoming.length}</h2>{incoming.map((row) => <div key={row.id} className="flex items-center gap-[9px] py-[7px]"><Avatar profile={profiles[row.requester_id]} /><span className="min-w-0 flex-1 truncate text-[13px]">{profiles[row.requester_id]?.display_name ?? "Wavo"}</span><button type="button" title={c.accept} disabled={busy} onClick={() => void act(() => socialClient.acceptFriend(row.id))} className="rounded-[7px] p-[6px] text-green-400 hover:bg-white/10"><LuCheck size={17} /></button><button type="button" title={c.decline} disabled={busy} onClick={() => void act(() => socialClient.removeFriend(row.id))} className="rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10"><LuX size={17} /></button></div>)}</section>}
-            <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.friends} · {accepted.length}</h2>{loading ? <div role="status" aria-label={c.loading} className="wavo-friends-skeleton"><span /><span /><span /></div> : accepted.length ? accepted.map((row) => { const id = personId(row); const profile = profiles[id]; return <button key={row.id} type="button" aria-pressed={selectedId === id} onClick={() => setSelectedId(id)} className={`wavo-friend-row flex w-full items-center gap-[10px] rounded-[10px] border px-[8px] py-[9px] text-left transition-colors hover:bg-white/8 ${selectedId === id ? "border-accent-primary/40 bg-accent-primary/15" : "border-transparent"}`}><Avatar profile={profile} /><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold">{profile?.display_name ?? "Wavo"}</span><span className={`wavo-friend-presence ${activities[id]?.track_title ? "is-listening" : ""}`}>{activities[id]?.track_title ? <><LuMusic2 size={11} />{activities[id].track_title}</> : `@${profile?.username ?? "…"}`}</span></span></button>; }) : <div className="wavo-people-empty"><span><LuUserPlus size={22} /></span><h3>{c.emptyFriends}</h3><p>{c.noFriends}</p></div>}</section>
-            {accepted.some((row) => activities[personId(row)]?.track_title) && <section className="mt-[12px] rounded-[9px] border border-border-alpha-14 px-[9px] py-[8px]">
-              <p className="m-0 text-[10px] font-semibold uppercase text-text-tertiary">{locale === "de" ? "Hören gerade" : "Listening now"}</p>
+            {search.trim() && <div className="mt-[14px]"><p className="mb-[7px] text-[11px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.search}</p>{searching ? <p role="status" className="text-[12px] text-text-secondary">{c.searching}</p> : results.length ? results.map((person) => <div key={person.user_id} className="wavo-search-result flex items-center gap-[9px] rounded-[9px] px-[5px] py-[8px]"><Avatar profile={person} /><div className="min-w-0 flex-1"><p className="m-0 truncate text-[13px] font-semibold">{person.display_name}</p><p className="m-0 truncate text-[11px] text-text-tertiary">@{person.username}</p></div><button type="button" disabled={busy || existingIds.has(person.user_id)} onClick={() => void act(() => socialClient.requestFriend(person.user_id))} aria-label={`${c.add}: ${person.username}`} title={existingIds.has(person.user_id) ? c.pending : c.add} className="rounded-[8px] p-[7px] text-text-secondary hover:bg-white/10 disabled:opacity-35"><LuUserPlus size={17} /></button></div>) : <p className="text-[12px] text-text-tertiary">{c.searchEmpty}</p>}</div>}
+            {incoming.length > 0 && <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.requests} · {incoming.length}</h2>{incoming.map((row) => <div key={row.id} className="wavo-request-row flex items-center gap-[9px] py-[7px]"><Avatar profile={profiles[row.requester_id]} /><span className="min-w-0 flex-1 truncate text-[13px]">{profiles[row.requester_id]?.display_name ?? "Wavo"}</span><button type="button" title={c.accept} disabled={busy} onClick={() => void act(() => socialClient.acceptFriend(row.id))} className="rounded-[7px] p-[6px] text-green-400 hover:bg-white/10"><LuCheck size={17} /></button><button type="button" title={c.decline} disabled={busy} onClick={() => void act(() => socialClient.removeFriend(row.id))} className="rounded-[7px] p-[6px] text-text-tertiary hover:bg-white/10"><LuX size={17} /></button></div>)}</section>}
+            <section className="mt-[22px]"><h2 className="mb-[8px] text-[12px] font-semibold uppercase tracking-[.12em] text-text-tertiary">{c.friends} · {accepted.length}</h2>{loading ? <div role="status" aria-label={c.loading} className="wavo-friends-skeleton"><span /><span /><span /></div> : accepted.length ? accepted.map((row) => { const id = personId(row); const profile = profiles[id]; const listening = activities[id]?.track_title; return <button key={row.id} type="button" aria-pressed={selectedId === id} onClick={() => setSelectedId(id)} className={`wavo-friend-row flex w-full items-center gap-[10px] rounded-[10px] border px-[8px] py-[9px] text-left transition-colors ${selectedId === id ? "is-active" : ""}`}><span className="wavo-friend-avatar"><Avatar profile={profile} /><i className={listening ? "is-listening" : ""} /></span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold">{profile?.display_name ?? "Wavo"}</span><span className={`wavo-friend-presence ${listening ? "is-listening" : ""}`}>{listening ? <><LuMusic2 size={11} />{listening}</> : `@${profile?.username ?? "…"}`}</span></span><LuMessageCircle size={15} className="wavo-friend-open" /></button>; }) : <div className="wavo-people-empty"><span><LuUserPlus size={22} /></span><h3>{c.emptyFriends}</h3><p>{c.noFriends}</p></div>}</section>
+            {accepted.some((row) => activities[personId(row)]?.track_title) && <section className="wavo-listening-now mt-[12px]">
+              <p className="wavo-listening-now-title">{locale === "de" ? "Hören gerade" : "Listening now"}</p>
               {accepted.map((row) => { const id = personId(row); const activity = activities[id];
                 return activity?.track_title ? <p key={id} className="mb-0 mt-[5px] truncate text-[11px] text-text-secondary">{profiles[id]?.display_name ?? "Wavo"}: {activity.track_title} · {activity.artist_name}</p> : null;
               })}

@@ -148,6 +148,7 @@ function TrackCard({
             alt={item.item.title}
             fill
             sizes="175px"
+            lazy
             className={`object-cover transition-all duration-300 group-hover:brightness-[1.15] ${
               imageLoaded ? "opacity-100" : "opacity-0"
             }`}
@@ -253,6 +254,7 @@ function AlbumCard({
             alt={item.item.title}
             fill
             sizes="175px"
+            lazy
             className={`object-cover transition-all duration-300 group-hover:brightness-[1.15] ${
               imageLoaded ? "opacity-100" : "opacity-0"
             }`}
@@ -351,6 +353,7 @@ function PlaylistCard({
             alt={item.item.title}
             fill
             sizes="175px"
+            lazy
             className={`object-cover transition-all duration-300 group-hover:brightness-[1.15] ${
               imageLoaded ? "opacity-100" : "opacity-0"
             }`}
@@ -432,6 +435,7 @@ function ArtistCard({ item }: { item: PopularItem & { type: "artist" } }) {
             alt={item.item.name}
             fill
             sizes="175px"
+            lazy
             className={`object-cover transition-all duration-300 group-hover:brightness-[1.15] ${
               imageLoaded ? "opacity-100" : "opacity-0"
             }`}

@@ -23,4 +23,3 @@ export {
   type LyricsWord,
   type SyncedLine,
 } from "./hooks/useLyricsAnimator";
-export { LyricsProviderIsland } from "./ui/LyricsProviderIsland";

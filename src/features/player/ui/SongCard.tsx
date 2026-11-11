@@ -37,6 +37,8 @@ export interface SongCardProps {
   actions?: React.ReactNode;
   showReorderHandle?: boolean;
   onGrabStart?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  // dims the track content (cover, title, artists, duration) but keeps the actions vivid
+  muted?: boolean;
 }
 
 function SongCard({
@@ -66,6 +68,7 @@ function SongCard({
   actions,
   showReorderHandle,
   onGrabStart,
+  muted = false,
 }: SongCardProps) {
   const { t } = useTranslation();
   const [imageLoaded, setImageLoaded] = useState(() => isCoverReady(coverUrl));
@@ -80,6 +83,7 @@ function SongCard({
   const artistSizeClass = compact ? "text-[12px]" : "text-[15px]";
   const gapClass = compact ? "gap-[12px]" : "gap-[16px]";
   const paddingClass = compact ? "p-[6px]" : "p-[8px]";
+  const mutedClass = muted ? "opacity-45 grayscale" : "";
 
   const handleClick = (e: React.MouseEvent) => {
     if (typeof window !== "undefined" && window.__wavoWasDragging) {
@@ -146,7 +150,7 @@ function SongCard({
       role={onPlay ? "button" : undefined}
       tabIndex={onPlay ? 0 : undefined}
     >
-      <div className={`flex items-center ${gapClass} min-w-0`}>
+      <div className={`flex items-center ${gapClass} min-w-0 ${mutedClass}`}>
         {trackNumber !== undefined ? (
           <div
             className={`flex ${imageSizeClass} shrink-0 items-center justify-center ${titleSizeClass} text-text-tertiary`}
@@ -231,7 +235,7 @@ function SongCard({
       <div className="flex items-center shrink-0 ml-[16px] gap-[16px]">
         {releaseDate && (
           <span
-            className="text-[14px] text-text-tertiary"
+            className={`text-[14px] text-text-tertiary ${mutedClass}`}
             style={{
               fontFamily: "var(--font-inter), sans-serif",
               fontWeight: 400,
@@ -242,7 +246,7 @@ function SongCard({
         )}
         {duration && (
           <span
-            className="text-[14px] text-text-tertiary"
+            className={`text-[14px] text-text-tertiary ${mutedClass}`}
             style={{
               fontFamily: "var(--font-inter), sans-serif",
               fontWeight: 400,

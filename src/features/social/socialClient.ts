@@ -17,10 +17,14 @@ export interface Friendship {
   created_at: string;
 }
 
+export interface SharedPlaylistTrack extends ApiTrack {
+  disliked?: boolean;
+}
+
 export interface SharedPlaylist {
   title: string;
   description?: string;
-  tracks: ApiTrack[];
+  tracks: SharedPlaylistTrack[];
   source?: { type: "album" | "playlist"; id: string };
 }
 
@@ -51,7 +55,7 @@ export function parseSharedPlaylist(value: unknown): SharedPlaylist | null {
   const source = value as Record<string, unknown>;
   if (typeof source.title !== "string" || source.title.length > 200 || !source.title.trim() ||
       !Array.isArray(source.tracks) || source.tracks.length > 1000) return null;
-  const tracks: ApiTrack[] = [];
+  const tracks: SharedPlaylistTrack[] = [];
   for (const raw of source.tracks) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const track = raw as Record<string, unknown>;
@@ -73,6 +77,7 @@ export function parseSharedPlaylist(value: unknown): SharedPlaylist | null {
       ...(typeof track.explicit === "boolean" ? { explicit: track.explicit } : {}),
       ...(track.cover && typeof track.cover === "object" && !Array.isArray(track.cover) && typeof (track.cover as Record<string, unknown>).url === "string"
         ? { cover: { url: String((track.cover as Record<string, unknown>).url), width: 512, height: 512 } } : {}),
+      ...(track.disliked === true ? { disliked: true } : {}),
     });
   }
   return {

@@ -3,8 +3,10 @@ import { useEffect, useState, useRef } from "react";
 import { markCoverReady, useCoverSrc } from "../lib/coverArt";
 import { prepareCoverFallback } from "../lib/coverSigner";
 
-type CoverImageProps = Omit<ImageProps, "src" | "onError"> & {
+type CoverImageProps = Omit<ImageProps, "src" | "onError" | "containerRef"> & {
   src: string;
+  /** Defers loading until the cover is near the viewport (home rows). */
+  lazy?: boolean;
 };
 
 // cover art renderer with automatic proxy fallback on direct cdn failure and self-healing retries
@@ -12,9 +14,30 @@ export default function CoverImage({
   src,
   onLoad,
   crossOrigin = "anonymous",
+  lazy = false,
   ...rest
 }: CoverImageProps) {
-  const centralSrc = useCoverSrc(src);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(!lazy);
+
+  useEffect(() => {
+    if (!lazy || visible) return;
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "250px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [lazy, visible]);
+
+  const centralSrc = useCoverSrc(src, !lazy || visible);
   const [localFallback, setLocalFallback] = useState<string | undefined>(undefined);
   const [retryCount, setRetryCount] = useState(0);
   const [corsMode, setCorsMode] = useState<ImageProps["crossOrigin"]>(crossOrigin || undefined);
@@ -67,6 +90,7 @@ export default function CoverImage({
   return (
     <AppImage
       {...rest}
+      containerRef={containerRef}
       key={`${effectiveSrc}-${corsMode ?? "nocors"}-${retryCount}`}
       src={effectiveSrc}
       crossOrigin={corsMode}

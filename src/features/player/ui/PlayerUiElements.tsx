@@ -9,7 +9,7 @@ import {
   Shuffle,
 } from "@solar-icons/react";
 import { HeartFill, HeartLine } from "@mingcute/react";
-import { LuMessageSquareQuote } from "react-icons/lu";
+import { LuMessageSquareQuote, LuSparkles } from "react-icons/lu";
 import {
   PlayerMorphIcon,
   ICON_PLAY,
@@ -68,6 +68,7 @@ interface PlayerUiElementsProps {
   onArtworkSizeChange?: (size: number) => void;
   lyricsVisible?: boolean;
   onToggleLyrics?: () => void;
+  onEditWordTiming?: () => void;
 }
 
 export function PlayerUiElements({
@@ -78,6 +79,7 @@ export function PlayerUiElements({
   onArtworkSizeChange,
   lyricsVisible = true,
   onToggleLyrics,
+  onEditWordTiming,
 }: PlayerUiElementsProps) {
   const player = usePlayerState();
 
@@ -205,20 +207,32 @@ export function PlayerUiElements({
       <div className="relative flex items-center gap-[14px]">
         <PlayerOptionsMenu
           className={`${iconButtonClass} absolute right-full mr-[14px] rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
+          trackId={track?.id}
           artworkSize={artworkSize}
           preferredArtworkSize={preferredArtworkSize}
           onArtworkSizeChange={onArtworkSizeChange}
+          onEditWordTiming={onEditWordTiming}
         />
         <button
           type="button"
           aria-label="Shuffle"
-          title={player.shuffle ? t("player.shuffle_on") : t("player.shuffle_off")}
-          onClick={() => playerEngine.setShuffle(!player.shuffle)}
-          className={`${iconButtonClass} ${
+          aria-pressed={player.shuffle}
+          title={
+            player.shuffle && player.smartShuffle
+              ? t("player.shuffle_smart_on")
+              : player.shuffle
+                ? t("player.shuffle_on")
+                : t("player.shuffle_off")
+          }
+          onClick={() => playerEngine.cycleShuffle()}
+          className={`${iconButtonClass} relative ${
             player.shuffle ? "!text-white !opacity-100" : "!text-white/40"
           }`}
         >
           <Shuffle size={18} weight={player.shuffle ? "Bold" : "Outline"} />
+          {player.shuffle && player.smartShuffle && (
+            <LuSparkles className="absolute -right-[1px] -top-[1px]" size={9} aria-hidden="true" />
+          )}
         </button>
 
         <button

@@ -13,6 +13,7 @@ export {
   useLikedTrackCount,
   applyOptimisticLike,
   applyOptimisticUnlike,
+  settleOptimisticLike,
 } from "./useLikedTracks";
 export {
   useIsTrackLiked,

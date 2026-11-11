@@ -221,19 +221,19 @@ function effectiveCoverSrc(url: string | undefined): string | undefined {
  * to have failed. Shares the single registry/loader, so it costs no extra
  * request beyond what `CoverImage`/`useCoverReady` already issue for the cover.
  */
-export function useCoverSrc(url: string | undefined): string | undefined {
+export function useCoverSrc(url: string | undefined, enabled = true): string | undefined {
   const subscribeToUrl = useCallback(
     (onChange: () => void) => {
-      if (!url) return () => {};
+      if (!url || !enabled) return () => {};
       void preloadCoverArt(url);
       return subscribe(url, onChange);
     },
-    [url],
+    [url, enabled],
   );
 
   return useSyncExternalStore(
     subscribeToUrl,
-    () => effectiveCoverSrc(url),
+    () => (enabled ? effectiveCoverSrc(url) : url),
     () => url,
   );
 }

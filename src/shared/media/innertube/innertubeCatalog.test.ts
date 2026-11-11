@@ -7,7 +7,41 @@ vi.mock("@/shared/api/visitorSession", () => ({
   resetClientVisitorData,
 }));
 
-import { innertubeCatalog } from "./innertubeCatalog";
+import { innertubeCatalog, mapHomeShelves, mapMoodCategories } from "./innertubeCatalog";
+
+describe("home discovery", () => {
+  it("maps carousel shelves with their titles and drops duplicate cards", () => {
+    const album = { musicTwoRowItemRenderer: {
+      title: { runs: [{ text: "Test album" }] },
+      navigationEndpoint: { browseEndpoint: { browseId: "MPREtest", browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_ALBUM" } } } },
+      subtitle: { runs: [{ text: "Test artist", navigationEndpoint: artistLink("UCtest") }] },
+      thumbnailRenderer: { musicThumbnailRenderer: { thumbnail: { thumbnails: [{ url: "https://example.com/cover.jpg", width: 544, height: 544 }] } } },
+    } };
+    const video = { musicTwoRowItemRenderer: {
+      title: { runs: [{ text: "Test video" }] },
+      navigationEndpoint: { watchEndpoint: { videoId: "video-one" } },
+      subtitle: { runs: [{ text: "Test artist", navigationEndpoint: artistLink("UCtest") }] },
+      thumbnailRenderer: { musicThumbnailRenderer: { thumbnail: { thumbnails: [{ url: "https://example.com/video.jpg", width: 544, height: 544 }] } } },
+    } };
+    const shelves = mapHomeShelves({ contents: [
+      { musicCarouselShelfRenderer: { header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: "New releases" }] } } }, contents: [album, album] } },
+      { musicCarouselShelfRenderer: { header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: "Music videos" }] } } }, contents: [video] } },
+    ] });
+    expect(shelves).toHaveLength(2);
+    expect(shelves[0]).toMatchObject({ title: "New releases" });
+    expect(shelves[0].items).toHaveLength(1);
+    expect(shelves[0].items[0]).toMatchObject({ type: "album", id: "MPREtest", title: "Test album", cover: { url: "https://example.com/cover.jpg" } });
+    expect(shelves[1].items[0]).toMatchObject({ type: "track", id: "video-one" });
+  });
+
+  it("requests the home catalog and reports an empty response as unavailable", async () => {
+    const fetcher = vi.fn().mockResolvedValue(json({ contents: [] }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(innertubeCatalog.getHomeShelves()).rejects.toThrow("temporarily unavailable");
+    expect(bodyOf(fetcher.mock.calls[0]).browseId).toBe("FEmusic_home");
+    vi.unstubAllGlobals();
+  });
+});
 
 const artistLink = (browseId: string) => ({
   browseEndpoint: {
@@ -122,5 +156,52 @@ describe("innertubeCatalog", () => {
     const playlist = await innertubeCatalog.getPlaylist("PLabc");
     expect(bodyOf(fetchSpy.mock.calls[0]).browseId).toBe("VLPLabc");
     expect(playlist).toMatchObject({ id: "PLabc", title: "Mix", tracks: [{ id: "aaaaaaaaaaa" }] });
+  });
+
+  it("maps mood/genre buttons and names category shelves after their category", async () => {
+    const categories = mapMoodCategories({
+      contents: [
+        { musicNavigationButtonRenderer: {
+          buttonText: { runs: [{ text: "Autumn" }] },
+          clickCommand: { browseEndpoint: { browseId: "FEmusic_moods_and_genres_category", params: "ggMAutumn" } },
+        } },
+        { musicNavigationButtonRenderer: {
+          buttonText: { runs: [{ text: "Autumn" }] },
+          clickCommand: { browseEndpoint: { browseId: "FEmusic_moods_and_genres_category", params: "ggMAutumn" } },
+        } },
+        { musicNavigationButtonRenderer: {
+          buttonText: { runs: [{ text: "Chill" }] },
+          clickCommand: { browseEndpoint: { browseId: "FEmusic_moods_and_genres_category", params: "ggMChill" } },
+        } },
+      ],
+    });
+    expect(categories).toEqual([
+      { title: "Autumn", browseId: "FEmusic_moods_and_genres_category", params: "ggMAutumn" },
+      { title: "Chill", browseId: "FEmusic_moods_and_genres_category", params: "ggMChill" },
+    ]);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({
+      contents: [{
+        musicCarouselShelfRenderer: {
+          header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: "Featured playlists" }] } } },
+          contents: [{ musicTwoRowItemRenderer: {
+            title: { runs: [{ text: "Autumn mix" }] },
+            navigationEndpoint: { browseEndpoint: {
+              browseId: "VLautumn",
+              browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_PLAYLIST" } },
+            } },
+            thumbnailRenderer: { musicThumbnailRenderer: { thumbnail: { thumbnails: [{ url: "https://example.com/cover.jpg", width: 544, height: 544 }] } } },
+          } }],
+        },
+      }],
+    }));
+    const shelves = await innertubeCatalog.getCategoryShelves(categories[0]);
+    expect(bodyOf(fetchSpy.mock.calls[0])).toMatchObject({
+      browseId: "FEmusic_moods_and_genres_category",
+      params: "ggMAutumn",
+    });
+    expect(shelves).toHaveLength(1);
+    expect(shelves[0]).toMatchObject({ title: "Autumn · Featured playlists" });
+    expect(shelves[0].items[0]).toMatchObject({ type: "playlist", id: "VLautumn", title: "Autumn mix" });
   });
 });
