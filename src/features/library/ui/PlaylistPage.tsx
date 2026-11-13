@@ -17,7 +17,7 @@ import {
   LinkLine,
 } from "@mingcute/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { LuPencil, LuTrash2, LuText, LuShuffle, LuRepeat, LuThumbsDown } from "react-icons/lu";
+import { LuHeadphones, LuPencil, LuTrash2, LuText, LuShuffle, LuRepeat, LuThumbsDown } from "react-icons/lu";
 import Button from "@/shared/ui/Button";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import SongCardWithMenu from "@/features/player/ui/SongCardWithMenu";
@@ -39,6 +39,11 @@ import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
 import { buildPlaylistShareLink, toShareTrack } from "../services/playlistShare";
 import { useIsContentTransparent } from "@/features/settings/store/customizationStore";
+import {
+  listeningError,
+  listeningPlaylistFromTracks,
+  useListeningStore,
+} from "@/features/social/listeningStore";
 
 interface TrackItemProps {
   track: Track;
@@ -259,6 +264,22 @@ function LibraryPlaylistContent() {
 
   const { toast } = useToast();
   const [addedToQueue, setAddedToQueue] = useState(false);
+  const [listenBusy, setListenBusy] = useState(false);
+
+  const handleListenTogether = useCallback(async () => {
+    if (!decodedId || !viewData || currentTracks.length === 0) return;
+    setListenBusy(true);
+    try {
+      await useListeningStore.getState().startWithPlaylist(
+        listeningPlaylistFromTracks(decodedId, viewData.title, viewData.coverUrl, currentTracks),
+      );
+      navigate("/friends");
+    } catch (cause) {
+      toast(listeningError(cause), "error");
+    } finally {
+      setListenBusy(false);
+    }
+  }, [currentTracks, decodedId, navigate, toast, viewData]);
 
   const handleAddToQueue = useCallback(() => {
     if (!currentTracks.length || !viewData) return;
@@ -721,6 +742,19 @@ function LibraryPlaylistContent() {
                         <PlayFill size={16} />
                         <span>{t("common.play_all")}</span>
                       </Button>
+
+                      {decodedId && !isReadOnlyMode && (
+                        <Button
+                          variant={hasCustomBg ? "glass-action" : "outline"}
+                          onClick={() => void handleListenTogether()}
+                          disabled={listenBusy || currentTracks.length === 0}
+                          className="!h-[36px] w-full !text-[13px] !font-[500] px-[12px] flex items-center justify-center gap-[6px]"
+                          title={locale === "de" ? "Diese Playlist zusammen hören" : "Listen to this playlist together"}
+                        >
+                          <LuHeadphones size={16} />
+                          <span>{locale === "de" ? "Zusammen hören" : "Listen together"}</span>
+                        </Button>
+                      )}
 
                       <div className="flex items-center gap-[8px] w-full">
                         {!isDislikedMode && (

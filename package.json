@@ -1,6 +1,6 @@
 {
   "name": "@wavo/client",
-  "version": "0.156.0",
+  "version": "0.156.1",
   "type": "module",
   "private": true,
   "description": "Wavo Music Player",

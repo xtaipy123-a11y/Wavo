@@ -38,6 +38,23 @@ describe("local music library", () => {
     expect(localMusic.listLikedTracks().items).toEqual([]);
   });
 
+  it("records playback history in development without signing in", () => {
+    vi.stubEnv("DEV", true);
+    vi.stubEnv("VITE_DEV_SKIP_LOGIN", "true");
+    vi.mocked(getAuthSession).mockReturnValue(null);
+    // History used to throw here, which aborted the player store subscriber on
+    // every skip and left the old song playing.
+    localMusic.recordPlaybackEvent({
+      playbackSessionId: "session-1",
+      listeningSessionId: "listen-1",
+      trackId: track.id,
+      trackSnapshot: track,
+      playedDurationMs: 45000,
+      completionRate: 0.25,
+    });
+    expect(localMusic.getHistory().items).toHaveLength(1);
+  });
+
   it.each([
     [false, "true"],
     [true, "false"],

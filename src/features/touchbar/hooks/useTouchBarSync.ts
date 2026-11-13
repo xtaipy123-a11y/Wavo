@@ -55,7 +55,7 @@ export function useTouchBarSync() {
           playerEngine.pause();
           break;
         case "next":
-          void playerEngine.skipNext(true);
+          void playerEngine.skipNext();
           break;
         case "prev":
           void playerEngine.skipPrevious();

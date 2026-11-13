@@ -87,9 +87,11 @@ describe("lyricsCache advanced caching logic", () => {
       expect(shouldCacheLyricsCandidate(makeCandidate("polaris-mono", "plain"))).toBe(false);
     });
 
-    it("allows any sync level for other providers (e.g. lrclib, kugou, musixmatch, netease)", () => {
+    it("allows line and plain sync for other providers but rejects lrclib word timing", () => {
       expect(shouldCacheLyricsCandidate(makeCandidate("lrclib", "line_level"))).toBe(true);
       expect(shouldCacheLyricsCandidate(makeCandidate("lrclib", "plain"))).toBe(true);
+      expect(shouldCacheLyricsCandidate(makeCandidate("lrclib", "word_level"))).toBe(false);
+      expect(shouldCacheLyricsCandidate(makeCandidate("LRCLIB", "syllable_level"))).toBe(false);
       expect(shouldCacheLyricsCandidate(makeCandidate("kugou", "line_level"))).toBe(true);
       expect(shouldCacheLyricsCandidate(makeCandidate("musixmatch", "plain"))).toBe(true);
     });
@@ -144,6 +146,25 @@ describe("lyricsCache advanced caching logic", () => {
       lyricsCache.setProvider("track_2", goodPolaris);
       expect(lyricsCache.has("track_2")).toBe(true);
       expect(lyricsCache.has("track_2", "Polaris Mono")).toBe(true);
+    });
+
+    it("drops stale word-level lrclib entries when reading the cache", () => {
+      const stale = makeCandidate("lrclib", "word_level", 84, "[00:01.00] estimated words");
+      localStorageMock.setItem(
+        "wavo_lyrics_v2_item_track_stale",
+        JSON.stringify({
+          trackId: "track_stale",
+          candidate: stale,
+          providers: { lrclib: stale },
+          availableProviders: [
+            { provider: "lrclib", syncLevel: "word_level", quality: 84, candidate: stale },
+          ],
+          timestamp: Date.now(),
+        }),
+      );
+
+      expect(lyricsCache.get("track_stale")).toBeNull();
+      expect(localStorageMock.getItem("wavo_lyrics_v2_item_track_stale")).toBeNull();
     });
 
     it("preserves individual provider options when set() with availableProviders is called", () => {

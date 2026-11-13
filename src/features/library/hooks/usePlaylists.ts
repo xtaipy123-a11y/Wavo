@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { api, getAuthSession, mediaUrl, toClientTrack, type ApiUserPlaylistItem } from "@/shared/api";
+import { getLocalUserId } from "@/shared/api/devIdentity";
 import { queryCache } from "@/shared/cache/queryCache";
 import type { Track } from "@/shared/types";
 
@@ -92,7 +93,8 @@ const SERVER_SNAPSHOT = { data: EMPTY, error: undefined as unknown, isLoading: t
 
 function load(force = false): Promise<void> {
   const session = getAuthSession();
-  const nextOwnerId = session?.accessToken ? session.user?.id ?? null : null;
+  // Dev guest mode has no Supabase session, but local playlists still need an owner.
+  const nextOwnerId = getLocalUserId(session?.user?.id);
   if (nextOwnerId !== ownerId) {
     ownerId = nextOwnerId;
     generation++;

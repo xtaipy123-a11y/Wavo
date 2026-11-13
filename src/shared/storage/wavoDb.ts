@@ -510,7 +510,7 @@ class WavoDb {
 
   async getLyrics(trackId: string): Promise<CachedLyricsRecord | null> {
     const mem = this.memLyrics.get(trackId);
-    if (mem) return mem;
+    if (mem) return this.readSanitizedLyrics(trackId, mem);
 
     const result = await this.runTransaction("lyrics", "readonly", (store) => {
       return new Promise<CachedLyricsRecord | null>((resolve) => {
@@ -520,32 +520,40 @@ class WavoDb {
       });
     });
 
-    if (result) {
-      if (!result.providers) {
-        result.providers = {};
-        if (result.candidate) {
-          result.providers[result.candidate.provider.toLowerCase().trim()] =
-            result.candidate;
-        }
-        if (result.availableProviders) {
-          for (const opt of result.availableProviders) {
-            if (opt.candidate) {
-              result.providers[opt.provider.toLowerCase().trim()] =
-                opt.candidate;
-            }
-          }
-        }
-      }
-      this.memLyrics.set(trackId, result);
-      return result;
-    }
-    return this.memLyrics.get(trackId) || null;
+    if (result) return this.readSanitizedLyrics(trackId, result);
+    const fallback = this.memLyrics.get(trackId);
+    return fallback ? this.readSanitizedLyrics(trackId, fallback) : null;
   }
 
-  async putLyrics(record: CachedLyricsRecord): Promise<void> {
-    const providers: Record<string, LyricsCandidate> = {
-      ...(record.providers || {}),
-    };
+  private readSanitizedLyrics(
+    trackId: string,
+    record: CachedLyricsRecord,
+  ): CachedLyricsRecord | null {
+    const sanitized = this.sanitizeLyricsRecord(record);
+    if (!sanitized) {
+      // Stale record (e.g. word-level lrclib from an older version) is dropped
+      // so the player fetches fresh line-synced lyrics instead.
+      this.memLyrics.delete(trackId);
+      void this.runTransaction("lyrics", "readwrite", (store) => {
+        return new Promise<void>((resolve) => {
+          const req = store.delete(trackId);
+          req.onsuccess = () => resolve();
+          req.onerror = () => resolve();
+        });
+      }).catch(() => {});
+      return null;
+    }
+    this.memLyrics.set(trackId, sanitized);
+    return sanitized;
+  }
+
+  private sanitizeLyricsRecord(
+    record: CachedLyricsRecord,
+  ): CachedLyricsRecord | null {
+    const providers: Record<string, LyricsCandidate> = {};
+    for (const [key, candidate] of Object.entries(record.providers || {})) {
+      if (shouldCacheLyricsCandidate(candidate)) providers[key] = candidate;
+    }
 
     if (record.candidate && shouldCacheLyricsCandidate(record.candidate)) {
       providers[record.candidate.provider.toLowerCase().trim()] =
@@ -564,9 +572,7 @@ class WavoDb {
     const validCandidates = Object.values(providers).filter(
       shouldCacheLyricsCandidate,
     );
-    if (validCandidates.length === 0) {
-      return;
-    }
+    if (validCandidates.length === 0) return null;
 
     const validOptions: LyricsProviderOption[] = validCandidates
       .map((c) => ({
@@ -582,7 +588,7 @@ class WavoDb {
         ? record.candidate
         : validOptions[0].candidate;
 
-    const sanitizedRecord: CachedLyricsRecord = {
+    return {
       ...record,
       syncLevel: primaryCandidate.syncLevel,
       quality: primaryCandidate.quality.total,
@@ -593,6 +599,11 @@ class WavoDb {
       providers,
       availableProviders: validOptions,
     };
+  }
+
+  async putLyrics(record: CachedLyricsRecord): Promise<void> {
+    const sanitizedRecord = this.sanitizeLyricsRecord(record);
+    if (!sanitizedRecord) return;
 
     this.memLyrics.set(record.trackId, sanitizedRecord);
 

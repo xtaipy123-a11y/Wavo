@@ -43,7 +43,21 @@ export function shouldCacheLyricsCandidate(
     return isWordLevelSync(candidate.syncLevel);
   }
 
+  // lrclib only serves line-synced or plain lyrics. Word-level entries are
+  // stale artifacts from an older estimation fallback and must be discarded.
+  if (p === "lrclib") {
+    return !isWordLevelSync(candidate.syncLevel);
+  }
+
   return true;
+}
+
+function needsSanitizing(item: CachedLyricsItem): boolean {
+  if (item.candidate && !shouldCacheLyricsCandidate(item.candidate)) return true;
+  if (item.providers && Object.values(item.providers).some((candidate) => !shouldCacheLyricsCandidate(candidate))) {
+    return true;
+  }
+  return Boolean(item.availableProviders?.some((option) => !shouldCacheLyricsCandidate(option.candidate)));
 }
 
 // ranks lyrics candidates by priority, sync depth, and quality
@@ -136,9 +150,10 @@ class LyricsCache {
     if (!parsed || !parsed.trackId) return null;
 
     // hydrate provider map if missing from older storage schemas
-    const providers: Record<string, LyricsCandidate> = {
-      ...(parsed.providers || {}),
-    };
+    const providers: Record<string, LyricsCandidate> = {};
+    for (const [key, candidate] of Object.entries(parsed.providers || {})) {
+      if (shouldCacheLyricsCandidate(candidate)) providers[key] = candidate;
+    }
     if (parsed.candidate && shouldCacheLyricsCandidate(parsed.candidate)) {
       const key = normalizeProviderKey(parsed.candidate.provider);
       if (!providers[key]) providers[key] = parsed.candidate;
@@ -190,6 +205,10 @@ class LyricsCache {
         this.memCache.set(trackId, normalized);
         return normalized;
       }
+      // Drop stored records that only contain invalid candidates.
+      try {
+        localStorage.removeItem(STORAGE_PREFIX + trackId);
+      } catch {}
       return null;
     } catch {
       return null;
@@ -204,6 +223,23 @@ class LyricsCache {
       item = this.loadFromStorage(trackId);
     }
     if (!item) return null;
+
+    // Drop stale provider entries (e.g. word-level lrclib from older versions)
+    // so a cached track never renders estimated word timing again.
+    if (needsSanitizing(item)) {
+      const sanitized = this.normalizeItem(item);
+      if (!sanitized) {
+        this.memCache.delete(trackId);
+        try {
+          localStorage.removeItem(STORAGE_PREFIX + trackId);
+        } catch {}
+        return null;
+      }
+      item = sanitized;
+      this.memCache.set(trackId, item);
+      this.saveToStorage(item);
+    }
+
     this.touch(trackId);
     return item;
   }

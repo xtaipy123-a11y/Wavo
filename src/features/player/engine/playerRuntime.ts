@@ -486,9 +486,11 @@ export class PlayerRuntime {
       this.recoveryAttempts = 0;
     }
 
-    if (this.preloadingTrackId === track.id && this.preloadingPromise) {
-      await this.preloadingPromise;
-    } else if (this.preloadingTrackId && this.preloadingTrackId !== track.id) {
+    // Never wait for an in-flight preload: it downloads the whole track, so
+    // awaiting it would keep the previous song playing (or hang on a stalled
+    // request) until the download finishes. Drop it and start streaming right
+    // away; the normal background caching still runs after playback starts.
+    if (this.preloadingTrackId) {
       this.preloadAbortController?.abort();
       this.preloadAbortController = null;
       this.preloadingTrackId = null;

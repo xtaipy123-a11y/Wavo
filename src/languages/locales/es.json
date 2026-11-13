@@ -55,7 +55,7 @@
     "app": {
       "name": "Wavo",
       "description": "Más de lo que te gusta",
-      "version": "Versión 0.156.0"
+      "version": "Versión 0.156.1"
     },
     "sidebar": {
       "home": "Inicio",

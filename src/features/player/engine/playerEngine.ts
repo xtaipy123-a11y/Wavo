@@ -249,17 +249,38 @@ class PlaybackTelemetryTracker {
   }
 
   private sendEvent(payload: RecordPlaybackEventRequest) {
-    void api.recordPlaybackEvent(payload).catch((err) => {
+    try {
+      void api.recordPlaybackEvent(payload).catch((err) => {
+        log(
+          "yellow",
+          "telemetry",
+          `playback event report failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    } catch (err) {
+      // Telemetry must never break playback or the store subscribers. Local
+      // libraries without a session throw synchronously instead of returning a
+      // rejected promise, which used to abort a skip halfway through.
       log(
         "yellow",
         "telemetry",
         `playback event report failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-    });
+    }
   }
 }
 
 class PlayerEngine {
+  /**
+   * Listening guests do not own playback: the room host does. When this returns
+   * true the skip is swallowed, because a local skip would either replay the
+   * guest's single-track queue or stop playback until the next room refresh put
+   * the host's song back.
+   */
+  public skipInterceptor:
+    | ((kind: "next" | "previous", isAutoEnd: boolean) => boolean)
+    | null = null;
+
   private sessionId = 0;
   private lyricsLoadToken = 0;
   private lyricsAbort: AbortController | null = null;
@@ -683,6 +704,7 @@ class PlayerEngine {
   }
 
   public async skipNext(isAutoEnd: boolean = false): Promise<void> {
+    if (this.skipInterceptor?.("next", isAutoEnd)) return;
     const store = usePlayerStore.getState();
     const nextIndex = this.computeNextIndex(isAutoEnd);
 
@@ -716,6 +738,7 @@ class PlayerEngine {
   }
 
   public async skipPrevious(): Promise<void> {
+    if (this.skipInterceptor?.("previous", false)) return;
     const store = usePlayerStore.getState();
     if (store.queue.length === 0) return;
 

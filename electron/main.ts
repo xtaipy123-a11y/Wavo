@@ -38,7 +38,7 @@ import { BundleManager } from "./bundle-manager.js";
 import { createSleepBlocker } from "./sleep-blocker.js";
 import { DiscordPresence } from "./discord-presence.js";
 import { createGlobalShortcutRegistry } from "./global-shortcuts.js";
-import { applyBrandingIcon } from "./branding-icon.js";
+import { applyBrandingIcon, stopBrandingWorker, warmBrandingShortcuts } from "./branding-icon.js";
 import { DEFAULT_SHORTCUTS, getShortcutActivationScope, type ShortcutsSettings, type ShortcutRegistrationResult } from "../src/features/shortcuts/types";
 
 // root error handling for main process
@@ -274,6 +274,7 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    warmBrandingShortcuts();
     ipcMain.on("discord:update-playback", (event, playback: unknown) => {
       if (event.sender === mainWindow?.webContents) discordPresence.update(playback);
     });
@@ -458,8 +459,12 @@ if (!gotTheLock) {
             app.dock.setIcon(icon);
           }
           if (process.platform === "win32") {
-            const png = icon.resize({ width: 256, height: 256, quality: "best" }).toPNG();
-            await applyBrandingIcon(png).catch((err) => {
+            // The renderer already sends a 256px PNG; reuse those bytes instead
+            // of re-encoding the image, so shortcut updates stay immediate.
+            const png = dataUrl.startsWith("data:image/png;base64,")
+              ? Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64")
+              : icon.toPNG();
+            void applyBrandingIcon(png).catch((err) => {
               console.error("\x1b[41;37m icon \x1b[0m shortcut sync error:", err);
             });
           }
@@ -1228,6 +1233,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  stopBrandingWorker();
   discordPresence.destroy();
   shortcutRegistry?.destroy();
   touchBarManager?.unregisterShortcut();

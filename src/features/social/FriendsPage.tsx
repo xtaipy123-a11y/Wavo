@@ -54,6 +54,7 @@ export default function FriendsPage() {
   const shareCollectionId = params.get("shareId");
   const shareReleaseId = params.get("shareRelease");
   const hasShare = Boolean(sharePlaylistId || shareReleaseId || (shareCollectionType && shareCollectionId));
+  const listenChooser = params.get("listen") === "choose";
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<SocialProfile[]>([]);
   const [searching, setSearching] = useState(false);
@@ -264,10 +265,15 @@ export default function FriendsPage() {
   const personId = (row: Friendship) => row.requester_id === me ? row.addressee_id : row.requester_id;
   const existingIds = new Set(friendships.flatMap((row) => [row.requester_id, row.addressee_id]));
   const chatIsOpen = Boolean(selectedId && accepted.some((row) => personId(row) === selectedId));
+  const listeningFriends = accepted.map((row) => { const id = personId(row); return { id, profile: profiles[id] }; });
 
   return (
-    <div className="wavo-friends-page min-h-full text-text-primary" data-no-window-drag>
+    <div className={`wavo-friends-page min-h-full text-text-primary${listenChooser ? " wavo-listen-standalone" : ""}`} data-no-window-drag>
       <div className="wavo-friends-content">
+        {listenChooser ? (
+          <ListeningPanel friends={listeningFriends} standalone />
+        ) : (
+          <>
         <header className="wavo-friends-header">
           <div><div className="wavo-friends-eyebrow"><LuUsers size={14} />{locale === "de" ? "DEINE COMMUNITY" : "YOUR COMMUNITY"}</div><h1>{c.title}<span>.</span></h1><p>{c.subtitle}</p></div>
           <label className="wavo-activity-toggle"><LuMusic2 size={18} /><span><strong>{c.activity}</strong><small>{c.activityHint}</small></span><input type="checkbox" role="switch" checked={shareActivity} onChange={(event) => {
@@ -279,7 +285,7 @@ export default function FriendsPage() {
         </header>
         {error && <div role="alert" className="mb-[16px] rounded-[12px] border border-red-400/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">{error}</div>}
         <div className="wavo-social-features">
-          <ListeningPanel friends={accepted.map((row) => { const id = personId(row); return { id, profile: profiles[id] }; })} />
+          <ListeningPanel friends={listeningFriends} />
         </div>
         <div className="wavo-social-layout" data-chat-open={chatIsOpen}>
           <aside className="wavo-social-people">
@@ -322,6 +328,8 @@ export default function FriendsPage() {
             </div>}
           </section>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -16,6 +16,8 @@ export interface PlaylistCardProps {
   onClick?: () => void;
   className?: string;
   menuItems?: DropdownMenuItem[];
+  /** Shown instead of the default playlist icon when the card has no cover. */
+  fallbackIcon?: React.ReactNode;
 }
 
 function CoverCollage({ urls, title }: { urls: string[]; title: string }) {
@@ -72,6 +74,7 @@ function PlaylistCard({
   onClick,
   className = "",
   menuItems,
+  fallbackIcon,
 }: PlaylistCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{
@@ -126,11 +129,13 @@ function PlaylistCard({
           )
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <PlaylistFill
-              size={32}
-              color="var(--color-border-alpha-33)"
-              className="text-border-alpha-33"
-            />
+            {fallbackIcon ?? (
+              <PlaylistFill
+                size={32}
+                color="var(--color-border-alpha-33)"
+                className="text-border-alpha-33"
+              />
+            )}
           </div>
         )}
       </div>

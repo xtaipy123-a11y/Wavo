@@ -14,7 +14,7 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square"></a>
 </p>
 
-Wavo is a modern desktop music player that brings catalog streaming, your own library, synchronized lyrics, offline listening and shared listening together in one app. The current release is **0.156.0**.
+Wavo is a modern desktop music player that brings catalog streaming, your own library, synchronized lyrics, offline listening and shared listening together in one app. The current release is **0.156.1**.
 
 ---
 
@@ -37,7 +37,7 @@ An Android project (Capacitor) is included and can be built as a debug APK. It i
 
 ### Lyrics
 
-- Line-synchronized and word-synchronized lyrics from multiple providers, including LRCLIB.
+- Line-synchronized and word-synchronized lyrics from multiple providers, including LRCLIB and AMLL. Matching ignores remaster, live and featuring tags and checks the track duration before word-timed lyrics are used.
 - Manual word-timing editor for songs without word-level timestamps.
 - Lyrics offset in milliseconds or seconds, provider switching and intro/outro pause lines.
 - Fullscreen player with dynamic WebGL backgrounds, resizable artwork and a hideable lyrics pane.
@@ -67,14 +67,14 @@ An Android project (Capacitor) is included and can be built as a debug APK. It i
 
 - Mini player and a floating, always-on-top desktop overlay.
 - Discord Rich Presence with the current song, artist and live progress.
-- Custom wallpapers (including animated GIFs), glassmorphism blur, accent branding and installable theme files.
+- Custom wallpapers (including animated GIFs), glassmorphism blur, accent branding and installable theme files. Branding changes update the app icon, desktop shortcuts and taskbar pins immediately.
 - `wavo://` deep links for tracks, albums, artists, playlists and private releases.
 - Automatic updates from GitHub Releases in the installed desktop app.
 
 ### Social and cloud
 
 - Friends, friend requests, private chat and public or private profiles.
-- Shared listening sessions: synchronized playback, shared queue, voting, guest requests and per-friend permissions.
+- Shared listening sessions: synchronized playback, shared queue, voting, guest requests and per-friend permissions. Start a session from any playlist with **Listen together**, with host-controlled repeat and shuffle and lyrics that stay in sync for every guest.
 - **Wavo Cloud** sync for favorites, playlists, saved collections, history, queue, settings and smart-playlist rules.
 - **Wavo Connect** to see signed-in devices and continue playback on another device.
 - Music statistics, Wavo Wrapped and smart playlists.

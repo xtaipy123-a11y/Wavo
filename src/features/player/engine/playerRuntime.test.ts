@@ -229,6 +229,51 @@ describe("PlayerRuntime audio caching", () => {
     expect(usePlayerStore.getState().status).toBe("playing");
   });
 
+  it("does not let an in-flight preload delay switching to that track", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    let resolveCalls = 0;
+    mocks.resolvePlaybackStream.mockImplementation(() => {
+      resolveCalls += 1;
+      // The preload request never settles; loading the track must not wait for it.
+      if (resolveCalls === 1) return new Promise(() => {});
+      return Promise.resolve(urlStream);
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 9, 9, 9, 9]), {
+        status: 206,
+        headers: { "content-type": "audio/webm" },
+      }),
+    );
+
+    const audio = (playerRuntime as unknown as { audio: HTMLAudioElement }).audio;
+    Object.defineProperty(audio, "readyState", { configurable: true, value: 3 });
+
+    const skipTarget: Track = {
+      ...track,
+      id: "preloading-skip-target",
+      title: "Preloading Skip Target",
+    };
+
+    try {
+      void playerRuntime!.preloadTrack(skipTarget);
+      await vi.waitFor(() => {
+        expect((playerRuntime as unknown as { preloadingTrackId: string | null }).preloadingTrackId)
+          .toBe(skipTarget.id);
+      });
+
+      const result = await Promise.race([
+        playerRuntime!.loadAndPlay(skipTarget).then(() => "loaded" as const),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 1000)),
+      ]);
+
+      expect(result).toBe("loaded");
+      expect(playerRuntime!.getCurrentTrackId()).toBe(skipTarget.id);
+      expect(usePlayerStore.getState().status).toBe("playing");
+    } finally {
+      Reflect.deleteProperty(audio, "readyState");
+    }
+  });
+
   it("evicts corrupt 0-byte audio blob from cache and fetches fresh stream", async () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     const sessionSpy = mocks.resolvePlaybackStream.mockResolvedValue(urlStream);

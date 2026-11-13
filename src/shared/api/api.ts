@@ -1019,7 +1019,13 @@ export const api = {
 
   recordPlaybackEvent(payload: RecordPlaybackEventRequest): Promise<void> {
     if (!musicApiAcceptsSupabaseJwt()) {
-      localMusic.recordPlaybackEvent(payload);
+      // History is a best-effort side channel: an anonymous library has no
+      // history store, and a synchronous throw here would abort playback.
+      try {
+        localMusic.recordPlaybackEvent(payload);
+      } catch {
+        return Promise.resolve();
+      }
       if (typeof window !== "undefined") window.dispatchEvent(new Event("history:changed"));
       return Promise.resolve();
     }

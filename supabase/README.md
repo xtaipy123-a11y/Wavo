@@ -13,10 +13,13 @@ Die neuen Tabellen waren bei der Prüfung noch nicht vorhanden. Die Erweiterung 
    gegen verspätete Uploads alter Hörereignisse.
 2. `202610200003_wavo_social_extensions.sql`: gemeinsame Playlists, Abstimmungen und
    optionale Freundesaktivität.
+3. `202611120001_wavo_listening_playlists.sql`: Playlist-Snapshot sowie Wiederholung und
+   Zufall für Hörsessions.
 
-Beide Dateien sind additiv. Sie enthalten keine Änderung oder Löschung bestehender
-Freundschaften, Chats und Hörsessions. Vor einer produktiven Anwendung ein Datenbank-Backup
-anlegen und die Dateien in dieser Reihenfolge im SQL Editor des bestehenden Projekts ausführen.
+Alle drei Dateien sind additiv. Sie enthalten keine Änderung oder Löschung bestehender
+Freundschaften, Chats und Hörsessions; bestehende Räume bleiben gültig. Vor einer produktiven
+Anwendung ein Datenbank-Backup anlegen und die Dateien in dieser Reihenfolge im SQL Editor des
+bestehenden Projekts ausführen.
 Der Desktop-Client besitzt bewusst nur den Publishable Key und kann DDL-Migrationen nicht selbst ausführen.
 
 ## Prüfung nach der Migration

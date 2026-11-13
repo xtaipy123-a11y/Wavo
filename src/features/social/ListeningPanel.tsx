@@ -1,38 +1,207 @@
-import { useEffect, useState } from "react";
-import { LuArrowUpRight, LuCheck, LuChevronDown, LuChevronUp, LuCrown, LuHeadphones, LuLogOut, LuMusic2, LuRadio, LuSearch, LuSkipForward, LuUserPlus, LuX } from "react-icons/lu";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import {
+  LuArrowLeft,
+  LuArrowUpRight,
+  LuCheck,
+  LuChevronDown,
+  LuChevronUp,
+  LuCrown,
+  LuHeadphones,
+  LuListMusic,
+  LuLogOut,
+  LuMusic2,
+  LuRadio,
+  LuRepeat,
+  LuRepeat1,
+  LuPlus,
+  LuSearch,
+  LuShuffle,
+  LuSkipForward,
+  LuUserPlus,
+  LuX,
+} from "react-icons/lu";
+import { HeartFill } from "@mingcute/react";
 import { useAuthStore } from "@/features/auth/store/authStore";
+import { playerEngine } from "@/features/player/engine/playerEngine";
+import { usePlayerStore } from "@/features/player/store/playerStore";
+import { getDevGuestId } from "@/shared/api/devIdentity";
+import { useModalStore } from "@/features/library/store/modalStore";
+import {
+  useLikedTracks,
+  usePlaylist,
+  usePlaylistsList,
+  type LibraryPlaylistDetail,
+  type LibraryPlaylistSummary,
+} from "@/features/library/hooks";
+import PlaylistCard from "@/features/library/ui/PlaylistCard";
 import { useSearchTracks } from "@/features/search/hooks/useSearchTracks";
 import { useTranslation } from "@/languages";
 import type { SocialProfile } from "./socialClient";
-import { listeningClient, type ListeningRoom } from "./listeningClient";
-import { canRequestListeningAction, listeningError, useListeningStore } from "./listeningStore";
+import { listeningClient, type ListeningRepeatMode, type ListeningRoom } from "./listeningClient";
+import {
+  canRequestListeningAction,
+  listeningError,
+  listeningPlaylistFromTracks,
+  useListeningStore,
+} from "./listeningStore";
 import { getSupabaseClient } from "@/shared/supabase/client";
 import type { ListeningVote } from "./listeningClient";
 
 interface ListeningPanelProps {
   friends: { id: string; profile?: SocialProfile }[];
+  standalone?: boolean;
 }
 
-export default function ListeningPanel({ friends }: ListeningPanelProps) {
-  const { locale } = useTranslation();
+/** Virtual playlist id for the user's liked songs. */
+const LIKES_PLAYLIST_ID = "likes";
+
+function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+export default function ListeningPanel({ friends, standalone = false }: ListeningPanelProps) {
+  const { t, locale } = useTranslation();
   const de = locale === "de";
-  const userId = useAuthStore((state) => state.user?.id);
-  const { room, members, invitations, error, start, invite, join, decline, leave, refresh } = useListeningStore();
+  const sessionUserId = useAuthStore((state) => state.user?.id);
+  // Dev guest mode has no Supabase session but still owns a local session.
+  const userId = sessionUserId ?? getDevGuestId() ?? undefined;
+  const openCreatePlaylist = useModalStore((state) => state.openCreatePlaylist);
+  const {
+    room, members, invitations, error, start, startWithPlaylist, setPlaylist,
+    setPlaybackSettings, invite, join, decline, leave, refresh,
+  } = useListeningStore();
+  const [params, setParams] = useSearchParams();
+  const chooserRequested = params.get("listen") === "choose";
+  const requestedPlaylistId = params.get("playlist");
+  const [chooserOpen, setChooserOpen] = useState(chooserRequested);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(requestedPlaylistId);
+  const { data: playlistList, isLoading: playlistsLoading } = usePlaylistsList();
+  // Liked songs behave like a playlist so they can be picked here as well.
+  const { data: likedData, isLoading: likedLoading } = useLikedTracks();
+  const likedTracks = likedData.tracks;
+  const likedCovers = useMemo(() => {
+    const covers: string[] = [];
+    for (const track of likedTracks) {
+      if (track.coverUrl && !covers.includes(track.coverUrl)) covers.push(track.coverUrl);
+      if (covers.length === 4) break;
+    }
+    return covers;
+  }, [likedTracks]);
+  const showChooser = chooserOpen || standalone;
+  const isLikesSelected = selectedPlaylistId === LIKES_PLAYLIST_ID;
+  const { data: selectedPlaylist, isLoading: selectedLoading } = usePlaylist(
+    showChooser && !isLikesSelected ? selectedPlaylistId : null,
+  );
+  const likesPlaylist = useMemo<LibraryPlaylistDetail>(() => ({
+    id: LIKES_PLAYLIST_ID,
+    title: t("library.liked_songs"),
+    trackCount: likedTracks.length,
+    coverUrl: likedCovers[0] ?? "",
+    coverUrls: likedCovers,
+    revision: 0,
+    tracks: likedTracks,
+  }), [likedCovers, likedTracks, t]);
+  const activePlaylist = isLikesSelected ? likesPlaylist : selectedPlaylist;
+  const activePlaylistLoading = isLikesSelected ? likedLoading : selectedLoading;
+  const pickerPlaylists = useMemo(() => {
+    // Keep the onboarding empty state for brand-new libraries, but expose the
+    // favorites as a playlist as soon as the library has any content.
+    if (likedTracks.length === 0 && playlistList.playlists.length === 0) {
+      return playlistList.playlists;
+    }
+    const likes: LibraryPlaylistSummary = {
+      id: LIKES_PLAYLIST_ID,
+      title: t("library.liked_songs"),
+      trackCount: likedTracks.length,
+      coverUrl: likedCovers[0] ?? "",
+      coverUrls: likedCovers,
+      updatedAt: "",
+      createdAt: "",
+      revision: 0,
+    };
+    return [likes, ...playlistList.playlists];
+  }, [likedCovers, likedTracks.length, playlistList.playlists, t]);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [votes, setVotes] = useState<ListeningVote[]>([]);
+
+  useEffect(() => {
+    if (chooserRequested) setChooserOpen(true);
+  }, [chooserRequested]);
+
+  useEffect(() => {
+    if (requestedPlaylistId) setSelectedPlaylistId(requestedPlaylistId);
+  }, [requestedPlaylistId]);
+
+  const updateChooserParams = (open: boolean, playlistId?: string | null) => {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (open) {
+        next.set("listen", "choose");
+        if (playlistId) next.set("playlist", playlistId);
+        else next.delete("playlist");
+      } else {
+        next.delete("listen");
+        next.delete("playlist");
+      }
+      return next;
+    }, { replace: true });
+  };
+  const openChooser = () => {
+    setChooserOpen(true);
+    updateChooserParams(true, selectedPlaylistId);
+  };
+  const closeChooser = () => {
+    setChooserOpen(false);
+    updateChooserParams(false);
+  };
+  const selectPlaylist = (id: string) => {
+    setSelectedPlaylistId(id);
+    updateChooserParams(true, id);
+  };
+  const selectedSnapshot = useMemo(() => activePlaylist
+    ? listeningPlaylistFromTracks(
+      activePlaylist.id,
+      activePlaylist.title,
+      activePlaylist.coverUrl,
+      activePlaylist.tracks,
+    )
+    : null, [activePlaylist]);
+  const selectedDurationMs = useMemo(
+    () => activePlaylist?.tracks.reduce((total, track) => total + (track.durationMs || 0), 0) ?? 0,
+    [activePlaylist],
+  );
   useEffect(() => {
     if (!room?.id) { setVotes([]); return; }
     let active = true;
     const refreshVotes = () => { void listeningClient.votes(room.id).then((rows) => { if (active) setVotes(rows); }).catch(() => {}); };
     refreshVotes();
-    const client = getSupabaseClient();
-    const channel = client.channel(`wavo-votes-${room.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "wavo_listening_votes", filter: `room_id=eq.${room.id}` }, refreshVotes)
-      .subscribe();
-    return () => { active = false; void client.removeChannel(channel); };
-  }, [room?.id]);
+    // Dev guest mode has no Supabase session, so only poll the local backend.
+    if (!sessionUserId) return () => { active = false; };
+    try {
+      const client = getSupabaseClient();
+      const channel = client.channel(`wavo-votes-${room.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "wavo_listening_votes", filter: `room_id=eq.${room.id}` }, refreshVotes)
+        .subscribe();
+      return () => { active = false; void client.removeChannel(channel); };
+    } catch {
+      return () => { active = false; };
+    }
+  }, [room?.id, sessionUserId]);
   const host = room?.host_id === userId;
+  // For the host the player itself is the source of truth: the room row is only
+  // a mirror that can lag behind or fail to publish. Guests keep reading the row.
+  const hostTrackTitle = usePlayerStore((state) => state.currentTrack?.title ?? null);
+  const nowPlayingTitle = host
+    ? hostTrackTitle || room?.track_title || null
+    : room?.track_title || null;
   const ownMember = members.find((member) => member.user_id === userId);
   const canAdd = canRequestListeningAction(room, ownMember, userId, "add");
   const canSkip = canRequestListeningAction(room, ownMember, userId, "skip");
@@ -60,11 +229,131 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
   const request = (kind: "add" | "skip" | "move", options?: { trackId?: string; fromIndex?: number; toIndex?: number }) => {
     if (room) void run(() => listeningClient.request(room.id, kind, options));
   };
+  const applySelectedPlaylist = () => {
+    if (!selectedSnapshot || !selectedSnapshot.tracks.length) return;
+    void run(async () => {
+      if (room) await setPlaylist(selectedSnapshot);
+      else await startWithPlaylist(selectedSnapshot);
+      closeChooser();
+    });
+  };
+  const cycleRepeat = () => {
+    if (!room || !host) return;
+    const next: ListeningRepeatMode = room.repeat_mode === "off" ? "all" : room.repeat_mode === "all" ? "one" : "off";
+    void run(() => setPlaybackSettings({ repeatMode: next }));
+  };
+  const toggleShuffle = () => {
+    if (!room || !host) return;
+    void run(() => setPlaybackSettings({ shuffle: !room.shuffle }));
+  };
+  const repeatLabel = room?.repeat_mode === "one"
+    ? (de ? "Titel wiederholen" : "Repeat song")
+    : room?.repeat_mode === "all"
+      ? (de ? "Playlist wiederholen" : "Repeat playlist")
+      : (de ? "Wiederholung aus" : "Repeat off");
   const activeMembers = members.filter((member) => member.status === "active");
 
   return (
-    <section className="wavo-listening-panel wavo-social-feature" data-active={Boolean(room)}>
-      {!room ? (
+    <section
+      className="wavo-listening-panel wavo-social-feature"
+      data-active={Boolean(room)}
+      data-chooser={showChooser ? "true" : undefined}
+      data-standalone={standalone ? "true" : undefined}
+    >
+      {showChooser ? (
+        <div className="wavo-listen-chooser">
+          <header className="wavo-listen-choose-head">
+            <h2>{de ? "Playlists" : "Playlists"}</h2>
+            <button type="button" onClick={() => openCreatePlaylist()} className="wavo-listen-leave">
+              <LuPlus size={15} />{de ? "Neue Playlist" : "New playlist"}
+            </button>
+            <button type="button" onClick={closeChooser} className="wavo-listen-leave">
+              <LuArrowLeft size={15} />{de ? "Zurück" : "Return"}
+            </button>
+          </header>
+          {standalone && error && <p role="alert" className="wavo-listen-error wavo-listen-chooser-error">{error}</p>}
+          <div className="wavo-listen-choose-body">
+            <div className="wavo-listen-choose-list">
+              {playlistsLoading || likedLoading ? (
+                <div className="wavo-listen-choose-skeleton">{Array.from({ length: 6 }).map((_, index) => <span key={index} />)}</div>
+              ) : pickerPlaylists.length ? (
+                <div className="wavo-listen-pick-grid">
+                  {pickerPlaylists.map((playlist) => (
+                    <div
+                      key={playlist.id}
+                      className={`wavo-listen-pick${selectedPlaylistId === playlist.id ? " is-selected" : ""}`}
+                    >
+                      <PlaylistCard
+                        title={playlist.title}
+                        author={`${playlist.trackCount} ${de ? "Songs" : "songs"}`}
+                        imageUrl={playlist.coverUrl}
+                        coverUrls={playlist.coverUrls}
+                        fallbackIcon={playlist.id === LIKES_PLAYLIST_ID
+                          ? <HeartFill size={32} color="var(--color-border-alpha-33)" className="text-border-alpha-33" />
+                          : undefined}
+                        onClick={() => selectPlaylist(playlist.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="wavo-listen-choose-empty">
+                  <LuListMusic size={24} />
+                  <p>{de ? "Du hast noch keine Playlists." : "You don't have any playlists yet."}</p>
+                  <button type="button" onClick={() => openCreatePlaylist()} className="wavo-listen-leave">
+                    <LuPlus size={15} />{de ? "Playlist erstellen" : "Create playlist"}
+                  </button>
+                </div>
+              )}
+            </div>
+            <aside className="wavo-listen-choose-side">
+              {!selectedPlaylistId ? (
+                <div className="wavo-listen-choose-empty">
+                  <LuMusic2 size={24} />
+                  <p>{de ? "Wähle links eine Playlist, um alle Songs zu sehen." : "Select a playlist on the left to see all songs."}</p>
+                </div>
+              ) : activePlaylistLoading && !activePlaylist ? (
+                <div className="wavo-listen-choose-loading">{de ? "Playlist wird geladen …" : "Loading playlist …"}</div>
+              ) : activePlaylist ? (
+                <>
+                  <div className="wavo-listen-side-head">
+                    <span className="wavo-listen-side-cover">
+                      {activePlaylist.coverUrl ? <img src={activePlaylist.coverUrl} alt="" /> : <LuMusic2 size={24} />}
+                    </span>
+                    <div className="wavo-listen-side-copy">
+                      <p className="wavo-card-kicker">{de ? "Ausgewählte Playlist" : "Selected playlist"}</p>
+                      <h3>{activePlaylist.title}</h3>
+                      <p>{activePlaylist.trackCount} {de ? "Songs" : "songs"} · {formatDuration(selectedDurationMs)}</p>
+                    </div>
+                  </div>
+                  <div className="wavo-listen-side-tracks">
+                    {activePlaylist.tracks.length ? activePlaylist.tracks.map((track, index) => (
+                      <div key={track.playlistItemId ?? `${track.id}-${index}`} className="wavo-listen-side-track">
+                        <span className="wavo-listen-side-index">{String(index + 1).padStart(2, "0")}</span>
+                        <span className="wavo-listen-side-track-copy">
+                          <strong>{track.title}</strong>
+                          <small>{track.artists}</small>
+                        </span>
+                        <span className="wavo-listen-side-duration">{formatDuration(track.durationMs || 0)}</span>
+                      </div>
+                    )) : <div className="wavo-listen-choose-empty"><p>{de ? "Diese Playlist ist leer." : "This playlist is empty."}</p></div>}
+                  </div>
+                  <div className="wavo-listen-side-footer">
+                    <button type="button" onClick={closeChooser} className="wavo-listen-side-return">
+                      <LuArrowLeft size={14} />{de ? "Zurück" : "Return"}
+                    </button>
+                    <button type="button" disabled={busy || !selectedSnapshot?.tracks.length} onClick={applySelectedPlaylist} className="wavo-listen-side-choose">
+                      <LuHeadphones size={15} />{de ? "Playlist wählen" : "Choose playlist"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="wavo-listen-choose-empty"><p>{de ? "Playlist konnte nicht geladen werden." : "The playlist could not be loaded."}</p></div>
+              )}
+            </aside>
+          </div>
+        </div>
+      ) : !room ? (
         <div className="wavo-listen-idle">
           <div className="wavo-listen-idle-copy">
             <div className="wavo-listen-topline">
@@ -77,6 +366,9 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
             <div className="wavo-listen-idle-actions">
               <button type="button" disabled={busy} onClick={() => void run(start)} className="wavo-feature-action">
                 <LuRadio size={16} />{de ? "Hörsession starten" : "Start a session"}<LuArrowUpRight size={15} />
+              </button>
+              <button type="button" disabled={busy} onClick={openChooser} className="wavo-listen-choose-entry">
+                <LuListMusic size={16} />{de ? "Playlist wählen" : "Choose playlist"}
               </button>
               <div className="wavo-listen-people">
                 <div className="wavo-listen-people-stack">
@@ -114,6 +406,9 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
               </div>
               <span>{activeMembers.length} {de ? "aktiv" : "active"}</span>
             </div>
+            {host && <button type="button" disabled={busy} onClick={openChooser} className="wavo-listen-leave wavo-listen-change">
+              <LuListMusic size={15} />{de ? "Playlist" : "Playlist"}
+            </button>}
             <button type="button" disabled={busy} onClick={() => void run(leave)} className="wavo-listen-leave">
               <LuLogOut size={15} />{host ? (de ? "Beenden" : "End") : (de ? "Verlassen" : "Leave")}
             </button>
@@ -126,11 +421,46 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
                 </div>
                 <div className="wavo-now-copy">
                   <p className="wavo-card-kicker">{de ? "Läuft gerade" : "Now playing"}</p>
-                  <p className="wavo-now-title">{room.track_title || (de ? "Noch kein Song" : "No song yet")}</p>
+                  <p className="wavo-now-title">{nowPlayingTitle || (de ? "Noch kein Song" : "No song yet")}</p>
+                  {room.playlist_title && <p className="wavo-now-playlist"><LuListMusic size={11} />{room.playlist_title}</p>}
                   <p className="wavo-now-hint">{room.is_playing ? (de ? "Synchron mit allen Teilnehmern" : "In sync with everyone") : (de ? "Pausiert" : "Paused")}</p>
                 </div>
-                {canSkip && <button type="button" disabled={busy || !room.track_id} onClick={() => request("skip")} title={de ? "Überspringen" : "Skip"} className="wavo-listen-icon-button"><LuSkipForward size={17} /></button>}
+                {canSkip && <button type="button" disabled={busy || !room.track_id} onClick={() => {
+                  // The host owns playback: skipping through a command row would
+                  // wait for the next command poll instead of skipping now.
+                  if (host) void playerEngine.skipNext();
+                  else request("skip");
+                }} title={de ? "Überspringen" : "Skip"} className="wavo-listen-icon-button"><LuSkipForward size={17} /></button>}
                 <div className="wavo-now-equalizer" data-paused={room.is_playing ? undefined : "true"} aria-hidden="true">{Array.from({ length: 4 }).map((_, index) => <i key={index} />)}</div>
+              </div>
+              <div className="wavo-listen-card wavo-listen-playback-card">
+                <div className="wavo-card-head">
+                  <span className="wavo-card-icon"><LuRepeat size={15} /></span>
+                  <h3>{de ? "Wiedergabe" : "Playback"}</h3>
+                </div>
+                <div className="wavo-listen-playback">
+                  <button
+                    type="button"
+                    disabled={!host || busy}
+                    onClick={cycleRepeat}
+                    className={room.repeat_mode !== "off" ? "is-on" : ""}
+                    title={repeatLabel}
+                  >
+                    {room.repeat_mode === "one" ? <LuRepeat1 size={15} /> : <LuRepeat size={15} />}
+                    <span>{repeatLabel}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!host || busy}
+                    onClick={toggleShuffle}
+                    className={room.shuffle ? "is-on" : ""}
+                    title={de ? "Zufallswiedergabe" : "Shuffle"}
+                  >
+                    <LuShuffle size={15} />
+                    <span>{room.shuffle ? (de ? "Zufall an" : "Shuffle on") : (de ? "Zufall aus" : "Shuffle off")}</span>
+                  </button>
+                </div>
+                {!host && <p className="wavo-card-hint">{de ? "Der Host steuert Wiederholung und Zufall." : "The host controls repeat and shuffle."}</p>}
               </div>
               <div className="wavo-listen-card">
                 <div className="wavo-card-head">
@@ -230,7 +560,7 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
           </div>
         </>
       )}
-      {invitations.length > 0 && <div className="wavo-listen-invitations">
+      {!standalone && invitations.length > 0 && <div className="wavo-listen-invitations">
         {invitations.map(({ room: invitedRoom }) => (
           <div key={invitedRoom.id} className="wavo-listen-invitation">
             <span className="wavo-invite-avatar">{initial(invitedRoom.host_id)}</span>
@@ -240,7 +570,7 @@ export default function ListeningPanel({ friends }: ListeningPanelProps) {
           </div>
         ))}
       </div>}
-      {error && <p role="alert" className="wavo-listen-error">{error}</p>}
+      {!standalone && error && <p role="alert" className="wavo-listen-error">{error}</p>}
     </section>
   );
 }

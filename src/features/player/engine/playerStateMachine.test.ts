@@ -64,6 +64,34 @@ describe("Player State Machine", () => {
     expect(state.status).toBe("loading");
   });
 
+  it("lets a listening guest skip through the room instead of the local queue", async () => {
+    const tracks = [mockTrack("1", "Track 1"), mockTrack("2", "Track 2")];
+    await playerEngine.playTrack(tracks[0], tracks);
+
+    const calls: Array<{ kind: string; isAutoEnd: boolean }> = [];
+    playerEngine.skipInterceptor = (kind, isAutoEnd) => {
+      calls.push({ kind, isAutoEnd });
+      return true;
+    };
+
+    try {
+      await playerEngine.skipNext();
+      await playerEngine.skipNext(true);
+      await playerEngine.skipPrevious();
+
+      const state = usePlayerStore.getState();
+      expect(state.currentIndex).toBe(0);
+      expect(state.currentTrack?.id).toBe("1");
+      expect(calls).toEqual([
+        { kind: "next", isAutoEnd: false },
+        { kind: "next", isAutoEnd: true },
+        { kind: "previous", isAutoEnd: false },
+      ]);
+    } finally {
+      playerEngine.skipInterceptor = null;
+    }
+  });
+
   it("overrides repeat='one' mode on manual skipNext and respects it on natural track end", async () => {
     const tracks = [mockTrack("1", "Track 1"), mockTrack("2", "Track 2")];
     await playerEngine.playTrack(tracks[0], tracks);

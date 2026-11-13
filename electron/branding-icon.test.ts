@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ app: { getPath: () => "" } }));
 
-import { pngToIco } from "./branding-icon";
+import { pngToIco, shortcutIconValue } from "./branding-icon";
 
 describe("branding icon", () => {
   it("wraps a PNG in a single-entry ICO container", () => {
@@ -19,5 +19,11 @@ describe("branding icon", () => {
     expect(ico.readUInt32LE(14)).toBe(png.length);
     expect(ico.readUInt32LE(18)).toBe(22);
     expect(ico.subarray(22).equals(png)).toBe(true);
+  });
+
+  it("builds an unquoted shortcut icon location", () => {
+    expect(shortcutIconValue("C:\\Users\\Some Name\\wavo\\icon.ico")).toBe(
+      "C:\\Users\\Some Name\\wavo\\icon.ico,0",
+    );
   });
 });

@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { LuCheck, LuHeadphones, LuX } from "react-icons/lu";
 import { useTranslation } from "@/languages";
 import { useAuthStore } from "@/features/auth/store/authStore";
+import { getDevGuestId } from "@/shared/api/devIdentity";
 import { listeningError, useListeningStore } from "./listeningStore";
 
 export default function ListeningBanner() {
   const { locale } = useTranslation();
   const de = locale === "de";
-  const userId = useAuthStore((state) => state.user?.id);
+  const sessionUserId = useAuthStore((state) => state.user?.id);
+  const userId = sessionUserId ?? getDevGuestId() ?? undefined;
   const { room, members, invitations, join, decline } = useListeningStore();
   const [busy, setBusy] = useState(false);
   const invitation = invitations[0];

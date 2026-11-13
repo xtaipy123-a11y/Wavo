@@ -19,6 +19,7 @@ import {
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from "framer-motion";
 import { PlayerUiElements } from "./PlayerUiElements";
 import { TimedWordLyricsView } from "./TimedWordLyricsView";
+import { resolveLyricsPlaybackClock } from "./lyricsPlaybackClock";
 import { WordTimingEditor } from "./WordTimingEditor";
 import { hasWordTimedLyrics } from "@/features/lyrics/engine/wordTiming";
 import { injectLyricsDots } from "@/features/lyrics/engine/lyricsGaps";
@@ -201,34 +202,56 @@ const BraccatoLyricsView = memo(function BraccatoLyricsView({ lyrics }: Braccato
     let lastReportedIndex = -1;
 
     const checkActiveLine = () => {
-      const audioEl = document.getElementById("wavo-audio") as HTMLAudioElement | null;
-      if (audioEl && !Number.isNaN(audioEl.currentTime)) {
-        const currentMs = audioEl.currentTime * 1000;
-        const lines = useLyricsStore.getState().syncedLines;
-        let idx = -1;
-        for (let i = 0; i < lines.length; i++) {
-          const prevEnd =
-            i > 0 && lines[i - 1].words && lines[i - 1].words!.length > 0
-              ? lines[i - 1].words![lines[i - 1].words!.length - 1].endMs
-              : i > 0
-                ? lines[i - 1].timeMs
-                : 0;
-          const targetEarlyMs = Math.max(prevEnd, lines[i].timeMs - 600);
-          if (targetEarlyMs <= currentMs) {
-            idx = i;
-          } else {
-            break;
-          }
+      const currentMs = resolveLyricsPlaybackClock().positionMs;
+      const lines = useLyricsStore.getState().syncedLines;
+      let idx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const prevEnd =
+          i > 0 && lines[i - 1].words && lines[i - 1].words!.length > 0
+            ? lines[i - 1].words![lines[i - 1].words!.length - 1].endMs
+            : i > 0
+              ? lines[i - 1].timeMs
+              : 0;
+        const targetEarlyMs = Math.max(prevEnd, lines[i].timeMs - 600);
+        if (targetEarlyMs <= currentMs) {
+          idx = i;
+        } else {
+          break;
         }
-        if (idx !== lastReportedIndex) {
-          lastReportedIndex = idx;
-          useLyricsStore.getState().setActiveLineIndex(idx >= 0 ? idx : null);
-        }
+      }
+      if (idx !== lastReportedIndex) {
+        lastReportedIndex = idx;
+        useLyricsStore.getState().setActiveLineIndex(idx >= 0 ? idx : null);
       }
       syncRafId = requestAnimationFrame(checkActiveLine);
     };
 
     syncRafId = requestAnimationFrame(checkActiveLine);
+
+    // Braccato reads the bound media element, which stays at zero when a guest's
+    // local audio is blocked or still buffering. Drive it from the room clock
+    // instead, and rebind as soon as the real audio element is advancing again.
+    let manualClock = false;
+    let manualRafId: number;
+    const driveManualClock = () => {
+      const el = elementRef.current;
+      if (el) {
+        const clock = resolveLyricsPlaybackClock();
+        if (clock.source === "listening") {
+          if (!manualClock) {
+            manualClock = true;
+            el.source = null;
+          }
+          el.currentTime = clock.positionMs / 1000;
+          el.playing = clock.playing;
+        } else if (manualClock) {
+          manualClock = false;
+          el.source = "#wavo-audio";
+        }
+      }
+      manualRafId = requestAnimationFrame(driveManualClock);
+    };
+    manualRafId = requestAnimationFrame(driveManualClock);
 
     el.addEventListener("braccato:lyrics-loaded", onLyricsLoaded);
     el.addEventListener("braccato:line-click", handleBraccatoLineClick);
@@ -237,6 +260,7 @@ const BraccatoLyricsView = memo(function BraccatoLyricsView({ lyrics }: Braccato
 
     return () => {
       cancelAnimationFrame(syncRafId);
+      cancelAnimationFrame(manualRafId);
       useLyricsStore.getState().setActiveLineIndex(null);
       el.removeEventListener("braccato:lyrics-loaded", onLyricsLoaded);
       el.removeEventListener("braccato:line-click", handleBraccatoLineClick);

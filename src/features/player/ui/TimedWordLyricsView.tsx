@@ -4,6 +4,7 @@ import { getTimedLyricsPosition } from "@/features/lyrics/engine/wordTiming";
 import { buildTimedDisplayLines } from "@/features/lyrics/engine/lyricsGaps";
 import { useLyricsStore } from "@/features/lyrics";
 import { playerEngine } from "../engine/playerEngine";
+import { resolveLyricsPlaybackClock } from "./lyricsPlaybackClock";
 
 interface TimedWordLyricsViewProps {
   lines: SyncedLine[];
@@ -14,12 +15,7 @@ const WORD_SPOKEN_COLOR = "#fff";
 const WORD_PENDING_COLOR = "rgba(255,255,255,0.38)";
 
 function currentAudioPositionMs(): number {
-  const snapshot = playerEngine.getSnapshot();
-  const audio = document.getElementById("wavo-audio") as HTMLAudioElement | null;
-  if ((snapshot.status === "playing" || snapshot.status === "paused") && audio?.readyState) {
-    return audio.currentTime * 1000;
-  }
-  return snapshot.positionMs;
+  return resolveLyricsPlaybackClock().positionMs;
 }
 
 export const TimedWordLyricsView = memo(function TimedWordLyricsView({ lines, durationMs = 0 }: TimedWordLyricsViewProps) {

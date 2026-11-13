@@ -1,7 +1,68 @@
 import { create } from "zustand";
-import { getAuthSession } from "@/shared/api";
+import { playerEngine, type RepeatMode } from "@/features/player/engine/playerEngine";
 import { usePlayerStore } from "@/features/player/store/playerStore";
-import { listeningClient, type ListeningInvitation, type ListeningMember, type ListeningRoom } from "./listeningClient";
+import type { Track } from "@/shared/types";
+import {
+  currentListeningUserId,
+  listeningClient,
+  type ListeningInvitation,
+  type ListeningMember,
+  type ListeningPlaylistSnapshot,
+  type ListeningQueueItem,
+  type ListeningRepeatMode,
+  type ListeningRoom,
+} from "./listeningClient";
+
+const MAX_PLAYLIST_TRACKS = 500;
+const MAX_PLAYLIST_DURATION_MS = 864_000_000;
+
+/** Builds the compact playlist snapshot the room shares with every guest. */
+export function listeningPlaylistFromTracks(
+  id: string,
+  title: string,
+  coverUrl: string,
+  tracks: Track[],
+): ListeningPlaylistSnapshot {
+  const snapshotTracks = tracks.slice(0, MAX_PLAYLIST_TRACKS).map((track) => ({
+    id: track.id.slice(0, 100),
+    title: (track.title || "Wavo").slice(0, 200),
+    artists: (track.artists || "").slice(0, 200),
+    coverUrl: (track.coverUrl || "").slice(0, 1000),
+    durationMs: Math.max(0, Math.round(track.durationMs || 0)),
+  }));
+  const durationMs = snapshotTracks.reduce((total, track) => total + track.durationMs, 0);
+  return {
+    id: id.slice(0, 500),
+    title: (title || "Playlist").slice(0, 500),
+    coverUrl: (coverUrl || "").slice(0, 2000),
+    trackCount: snapshotTracks.length,
+    durationMs: Math.min(MAX_PLAYLIST_DURATION_MS, durationMs),
+    tracks: snapshotTracks,
+  };
+}
+
+export function listeningSnapshotTracks(playlist: ListeningPlaylistSnapshot): Track[] {
+  return playlist.tracks.map((track) => ({
+    id: track.id,
+    title: track.title,
+    artists: track.artists,
+    coverUrl: track.coverUrl,
+    durationMs: track.durationMs,
+    playCount: 0,
+  }));
+}
+
+async function playPlaylist(playlist: ListeningPlaylistSnapshot, context: string, repeat: RepeatMode, shuffle: boolean) {
+  const tracks = listeningSnapshotTracks(playlist);
+  if (!tracks.length) return;
+  playerEngine.setRepeat(repeat);
+  if (shuffle) {
+    await playerEngine.playShuffled(tracks, context, playlist.coverUrl);
+  } else {
+    playerEngine.setShuffle(false);
+    await playerEngine.playTrack(tracks[0], tracks, context, playlist.coverUrl);
+  }
+}
 
 export function upcomingListeningQueue(player: ReturnType<typeof usePlayerStore.getState>) {
   return player.queue.slice(Math.max(0, player.currentIndex + 1), Math.max(0, player.currentIndex + 1) + 50)
@@ -30,15 +91,38 @@ interface ListeningState {
   error: string;
   refresh: () => Promise<void>;
   start: () => Promise<void>;
+  startWithPlaylist: (
+    playlist: ListeningPlaylistSnapshot,
+    options?: { repeatMode?: ListeningRepeatMode; shuffle?: boolean },
+  ) => Promise<void>;
+  setPlaylist: (
+    playlist: ListeningPlaylistSnapshot,
+    options?: { repeatMode?: ListeningRepeatMode; shuffle?: boolean },
+  ) => Promise<void>;
+  setPlaybackSettings: (settings: { repeatMode?: ListeningRepeatMode; shuffle?: boolean }) => Promise<void>;
   invite: (friendId: string) => Promise<void>;
   join: (roomId: string) => Promise<void>;
   decline: (roomId: string) => Promise<void>;
   leave: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
+  /** Mirrors the host's own player into the room row before the next poll. */
+  applyHostPlayback: (playback: {
+    trackId: string | null;
+    trackTitle: string | null;
+    positionMs: number;
+    isPlaying: boolean;
+    queue: ListeningQueueItem[];
+  }) => void;
 }
 
 let refreshSequence = 0;
+/**
+ * Bumped every time the host mirrors its own player into the room row. A
+ * refresh that was already in flight when that happened read the old row and
+ * would otherwise flash the previous song back into the panel.
+ */
+let hostPlaybackEpoch = 0;
 
 export function listeningError(cause: unknown): string {
   if (cause && typeof cause === "object") {
@@ -56,9 +140,19 @@ export const useListeningStore = create<ListeningState>((set, get) => ({
   error: "",
   refresh: async () => {
     const sequence = ++refreshSequence;
+    const epoch = hostPlaybackEpoch;
     try {
       const snapshot = await listeningClient.snapshot();
-      if (sequence === refreshSequence) set({ ...snapshot, error: "" });
+      if (sequence !== refreshSequence) return;
+      const current = get().room;
+      // The snapshot was requested before the host mirrored a fresh publish, so
+      // its room row is older than what the panel already shows. Keep the local
+      // playback state and only apply the membership changes.
+      if (epoch !== hostPlaybackEpoch && current && snapshot.room?.id === current.id) {
+        set({ members: snapshot.members, invitations: snapshot.invitations, error: "" });
+        return;
+      }
+      set({ ...snapshot, error: "" });
     } catch (cause) {
       if (sequence === refreshSequence) set({ error: listeningError(cause) });
     }
@@ -66,14 +160,57 @@ export const useListeningStore = create<ListeningState>((set, get) => ({
   start: async () => {
     const previous = get().room;
     if (previous) {
-      if (previous.host_id === getAuthSession()?.user?.id) return;
+      if (previous.host_id === currentListeningUserId()) return;
       await get().leave();
     }
     const player = usePlayerStore.getState();
     await listeningClient.createRoom(
       player.currentTrack?.id ?? null, player.currentTrack?.title ?? null,
       player.positionMs, player.status === "playing" || player.status === "loading", upcomingListeningQueue(player),
+      null, player.repeat, player.shuffle,
     );
+    await get().refresh();
+  },
+  startWithPlaylist: async (playlist, options) => {
+    const previous = get().room;
+    if (previous) {
+      if (previous.host_id === currentListeningUserId()) {
+        await get().setPlaylist(playlist, options);
+        return;
+      }
+      await get().leave();
+    }
+    const repeatMode = options?.repeatMode ?? "off";
+    const shuffle = options?.shuffle ?? false;
+    await playPlaylist(playlist, `listening:${playlist.id}`, repeatMode, shuffle);
+    const player = usePlayerStore.getState();
+    await listeningClient.createRoom(
+      player.currentTrack?.id ?? null, player.currentTrack?.title ?? null,
+      player.positionMs, player.status === "playing" || player.status === "loading",
+      upcomingListeningQueue(player), playlist, repeatMode, shuffle,
+    );
+    await get().refresh();
+  },
+  setPlaylist: async (playlist, options) => {
+    const room = get().room;
+    if (!room) throw new Error("Starte zuerst eine Hörsession.");
+    if (room.host_id !== currentListeningUserId()) throw new Error("Nur der Host kann die Playlist wechseln.");
+    const repeatMode = options?.repeatMode ?? room.repeat_mode;
+    const shuffle = options?.shuffle ?? room.shuffle;
+    await listeningClient.setPlaylist(room.id, playlist);
+    await listeningClient.setPlaybackSettings(room.id, { repeat_mode: repeatMode, shuffle });
+    await playPlaylist(playlist, `listening:${room.id}`, repeatMode, shuffle);
+    await get().refresh();
+  },
+  setPlaybackSettings: async (settings) => {
+    const room = get().room;
+    if (!room || room.host_id !== currentListeningUserId()) return;
+    if (settings.repeatMode) playerEngine.setRepeat(settings.repeatMode);
+    if (settings.shuffle !== undefined) playerEngine.setShuffle(settings.shuffle);
+    await listeningClient.setPlaybackSettings(room.id, {
+      ...(settings.repeatMode ? { repeat_mode: settings.repeatMode } : {}),
+      ...(settings.shuffle !== undefined ? { shuffle: settings.shuffle } : {}),
+    });
     await get().refresh();
   },
   invite: async (friendId) => {
@@ -86,6 +223,10 @@ export const useListeningStore = create<ListeningState>((set, get) => ({
     const previous = get().room;
     if (previous && previous.id !== roomId) await get().leave();
     await listeningClient.accept(roomId);
+    // Guests follow the host's track changes, so local repeat/shuffle must not
+    // keep an ended track looping on their own device.
+    playerEngine.setRepeat("off");
+    playerEngine.setShuffle(false);
     await get().refresh();
   },
   decline: async (roomId) => {
@@ -95,13 +236,30 @@ export const useListeningStore = create<ListeningState>((set, get) => ({
   leave: async () => {
     const room = get().room;
     if (!room) return;
-    if (room.host_id === getAuthSession()?.user?.id) await listeningClient.end(room.id);
+    if (room.host_id === currentListeningUserId()) await listeningClient.end(room.id);
     else await listeningClient.leave(room.id);
     set({ room: null, members: [] });
     await get().refresh();
   },
   clearError: () => set({ error: "" }),
   reset: () => { refreshSequence += 1; set({ room: null, members: [], invitations: [], error: "" }); },
+  applyHostPlayback: (playback) => {
+    const room = get().room;
+    if (!room) return;
+    // Only a track change can be reverted by a stale refresh; plain position
+    // heartbeats must not invalidate in-flight membership refreshes.
+    if (room.track_id !== playback.trackId) hostPlaybackEpoch += 1;
+    set({
+      room: {
+        ...room,
+        track_id: playback.trackId,
+        track_title: playback.trackTitle,
+        position_ms: Math.max(0, Math.round(playback.positionMs)),
+        is_playing: playback.isPlaying,
+        queue_snapshot: playback.queue,
+      },
+    });
+  },
 }));
 
 /**

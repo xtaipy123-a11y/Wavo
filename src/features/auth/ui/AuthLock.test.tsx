@@ -55,11 +55,11 @@ describe("AuthLock", () => {
     });
   }
 
-  it("opens the dev app without a session or authenticated background sync", async () => {
+  it("opens the dev app without a session and enables local listening sync", async () => {
     await render();
     expect(container.textContent).toBe("Home");
     expect(container.querySelector("main")).not.toBeNull();
-    expect(container.querySelector("[data-listening-sync]")).toBeNull();
+    expect(container.querySelector("[data-listening-sync]")).not.toBeNull();
     expect(auth.initialize).toHaveBeenCalledOnce();
   });
 

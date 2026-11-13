@@ -6,7 +6,7 @@ import type {
   Track,
 } from "../contracts";
 import { getAuthSession } from "./auth-session";
-import { getFavoritesOwnerId } from "./favoritesIdentity";
+import { getLocalUserId } from "./devIdentity";
 
 type LikedEntry = { track: Track; likedAt: string };
 type CollectionType = "albums" | "artists" | "playlists";
@@ -17,8 +17,9 @@ function changed(kind: "like" | "album" | "artist" | "catalog_playlist" | "histo
 }
 
 function storageKey(kind: "likes" | "history" | CollectionType): string | null {
-  const sessionUserId = getAuthSession()?.user?.id;
-  const userId = kind === "likes" ? getFavoritesOwnerId(sessionUserId) : sessionUserId;
+  // Dev guest mode has no session but still keeps a local library, so every
+  // local collection uses the same dev identity as the favorites.
+  const userId = getLocalUserId(getAuthSession()?.user?.id);
   return userId ? `wavo_local_${kind}_${userId}` : null;
 }
 

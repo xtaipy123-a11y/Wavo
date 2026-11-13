@@ -1,3 +1,28 @@
+# Neu in Wavo 0.156.1
+
+## Added
+
+- **Hörsessions aus Playlists:** In **Freunde** lässt sich eine Hörsession jetzt mit einer Playlist starten; in der Playlist selbst beginnt **Zusammen hören** dieselbe Session direkt. Der Raum übernimmt die komplette Titelliste, sodass Gäste alle Songs sehen und abspielen. Favoriten stehen als Playlist zur Auswahl, neue Playlists lassen sich im Auswahlfenster anlegen.
+- **Wiederholung und Zufall im Raum:** Der Host schaltet Wiederholung (aus, Playlist, Titel) und Shuffle direkt in der Session. Beide Einstellungen werden im Raum gespeichert und gelten für alle Gäste.
+
+## Changes
+
+- **Hörsession-Synchronisation beschleunigt:** Befehle werden schneller abgefragt, der Host spiegelt Songwechsel sofort in den Raum, und veraltete Abfragen können einen gerade übersprungenen Titel nicht mehr zurücksetzen. Gäste korrigieren ihre Position seltener und nur bei größerer Abweichung, damit die Wiedergabe nicht durch ständiges Springen stockt.
+- **Songtexte für Gäste bleiben im Takt:** Wenn das lokale Audio eines Gastes pausiert oder puffert, richten sich Liedtext und Wort-Hervorhebung nach der Position des Hosts statt einzufrieren.
+- **AMLL-Treffer verbessert:** Die Suche berücksichtigt Titel- und Künstlervarianten, ignoriert Zusätze wie Remaster, Live, Deluxe oder feat., prüft die Titeldauer und probiert mehrere Kandidaten, bevor sie aufgibt. Wort-Timing aus AMLL wird dadurch häufiger gefunden.
+- **Schnellere Icon-Übernahme unter Windows:** Ein vorgewärmter Hintergrundprozess aktualisiert Desktop- und Startmenü-Verknüpfungen sowie angeheftete Taskleisten-Symbole ohne spürbare Verzögerung. Rasche Branding-Wechsel werden zur zuletzt gewählten Variante zusammengefasst.
+- **Überspringen ohne Wartezeit:** Ein laufender Vorab-Download blockiert den Wechsel zum nächsten Titel nicht mehr; die Wiedergabe startet sofort und lädt im Hintergrund weiter.
+- **Robustere Wiedergabe ohne Anmeldung:** Fehler beim Melden von Wiedergabeereignissen oder beim Speichern des Verlaufs brechen das Überspringen nicht mehr ab. Lokale Bibliothek, Playlists, Verlauf und Hörsessions nutzen im Entwicklungsmodus dieselbe stabile Gast-Identität.
+- **Datenbank-Migration für Playlist-Sessions:** `202611120001_wavo_listening_playlists.sql` erweitert `wavo_listening_rooms` um den Playlist-Snapshot sowie Wiederholung und Zufall. Die Migration muss vor der Nutzung von Playlist-Hörsessions im Supabase SQL Editor ausgeführt werden.
+
+## Fixes
+
+- **Veraltete Wort-Timings entfernt:** Wortgenaue LRCLIB-Einträge aus älteren Versionen werden aus dem Cache gelöscht, statt geschätzte Wortzeiten erneut anzuzeigen.
+- **Kein Rücksprung im Raum:** Eine bereits laufende Aktualisierung überschreibt einen neuen Titel des Hosts nicht mehr; die Anzeige springt nicht auf den vorherigen Song zurück.
+- **Verknüpfungssymbole mit Leerzeichen im Pfad:** Windows-Verknüpfungen übernehmen das Branding-Icon jetzt auch dann, wenn der Installationspfad Leerzeichen enthält.
+- **Gäste-Wiedergabe:** Beim Beitritt werden lokale Wiederholung und Zufall zurückgesetzt, damit ein zu Ende gespielter Titel nicht auf dem eigenen Gerät weiterläuft.
+- **Playlist-Karten:** Karten ohne Cover zeigen wieder ein passendes Symbol; die Favoriten-Auswahl nutzt dafür ein Herz.
+
 # Neu in Wavo 0.156.0
 
 ## Added

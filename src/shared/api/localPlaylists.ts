@@ -1,6 +1,7 @@
 import type { ApiUserPlaylist, ApiUserPlaylistItem, Track } from "@/shared/contracts";
 import { wavoDb, type StoredUserPlaylistRecord } from "@/shared/storage/wavoDb";
 import { getAuthSession } from "./auth-session";
+import { getLocalUserId } from "./devIdentity";
 
 const mutationQueues = new Map<string, Promise<unknown>>();
 
@@ -49,9 +50,9 @@ function parseBackup(value: unknown): PlaylistBackup["playlists"] {
 }
 
 function ownerId(): string {
-  const session = getAuthSession();
-  if (!session?.user?.id) throw new Error("Sign in to manage playlists.");
-  return session.user.id;
+  const owner = getLocalUserId(getAuthSession()?.user?.id);
+  if (!owner) throw new Error("Sign in to manage playlists.");
+  return owner;
 }
 
 function newId(prefix: string): string {

@@ -6,7 +6,10 @@ import {
   estimateListeningClockSkew,
   expectedAnchorPosition,
   isListeningAnchorFresh,
+  listeningPlaylistFromTracks,
+  listeningSnapshotTracks,
   upcomingListeningQueue,
+  useListeningStore,
 } from "./listeningStore";
 
 const base: ListeningRoom = {
@@ -21,6 +24,14 @@ const base: ListeningRoom = {
   allow_guest_skip: false,
   allow_guest_reorder: false,
   queue_snapshot: [],
+  playlist_id: null,
+  playlist_title: null,
+  playlist_cover_url: null,
+  playlist_track_count: 0,
+  playlist_duration_ms: 0,
+  playlist_tracks: [],
+  repeat_mode: "off",
+  shuffle: false,
   created_at: "2026-10-19T12:00:00.000Z",
   updated_at: "2026-10-19T12:00:00.000Z",
 };
@@ -67,6 +78,60 @@ describe("listening playback anchor", () => {
   });
 });
 
+describe("listening playlist snapshot", () => {
+  const track = (index: number) => ({
+    id: `track-${index}`,
+    title: `Title ${index}`,
+    artists: "Artist",
+    coverUrl: "https://example.test/cover.jpg",
+    durationMs: 60_000,
+    playCount: 0,
+  });
+
+  it("builds a compact snapshot with a matching count and duration", () => {
+    const snapshot = listeningPlaylistFromTracks("playlist-1", "Mix", "https://example.test/mix.jpg", [
+      track(1),
+      track(2),
+    ]);
+    expect(snapshot).toMatchObject({
+      id: "playlist-1",
+      title: "Mix",
+      coverUrl: "https://example.test/mix.jpg",
+      trackCount: 2,
+      durationMs: 120_000,
+    });
+    expect(snapshot.tracks[0]).toEqual({
+      id: "track-1",
+      title: "Title 1",
+      artists: "Artist",
+      coverUrl: "https://example.test/cover.jpg",
+      durationMs: 60_000,
+    });
+  });
+
+  it("caps huge playlists so the room row stays inside the database limit", () => {
+    const tracks = Array.from({ length: 620 }, (_, index) => track(index));
+    const snapshot = listeningPlaylistFromTracks("playlist-2", "Huge", "", tracks);
+    expect(snapshot.trackCount).toBe(500);
+    expect(snapshot.tracks).toHaveLength(500);
+    expect(snapshot.durationMs).toBe(30_000_000);
+  });
+
+  it("round-trips snapshot tracks back into playable tracks", () => {
+    const snapshot = listeningPlaylistFromTracks("playlist-3", "Mix", "", [track(1)]);
+    expect(listeningSnapshotTracks(snapshot)).toEqual([
+      {
+        id: "track-1",
+        title: "Title 1",
+        artists: "Artist",
+        coverUrl: "https://example.test/cover.jpg",
+        durationMs: 60_000,
+        playCount: 0,
+      },
+    ]);
+  });
+});
+
 describe("shared listening queue", () => {
   it("publishes only upcoming tracks with absolute positions for reorder requests", () => {
     const player = { currentIndex: 1, queue: [
@@ -90,5 +155,41 @@ describe("shared listening queue", () => {
     expect(canRequestListeningAction(base, member, member.user_id, "move")).toBe(false);
     expect(canRequestListeningAction(base, { ...member, status: "invited" }, member.user_id, "add")).toBe(false);
     expect(canRequestListeningAction(base, undefined, base.host_id, "move")).toBe(true);
+  });
+});
+
+describe("host playback mirror", () => {
+  it("updates the room row without waiting for the next poll", () => {
+    useListeningStore.setState({ room: base, members: [] });
+
+    useListeningStore.getState().applyHostPlayback({
+      trackId: "song-2",
+      trackTitle: "Next song",
+      positionMs: 0,
+      isPlaying: true,
+      queue: [{ index: 1, id: "song-3", title: "Later", artists: "Artist" }],
+    });
+
+    expect(useListeningStore.getState().room).toMatchObject({
+      track_id: "song-2",
+      track_title: "Next song",
+      position_ms: 0,
+      is_playing: true,
+    });
+    expect(useListeningStore.getState().room?.queue_snapshot).toHaveLength(1);
+  });
+
+  it("leaves the state untouched when no room is active", () => {
+    useListeningStore.setState({ room: null, members: [] });
+
+    useListeningStore.getState().applyHostPlayback({
+      trackId: "song-2",
+      trackTitle: "Next song",
+      positionMs: 0,
+      isPlaying: false,
+      queue: [],
+    });
+
+    expect(useListeningStore.getState().room).toBeNull();
   });
 });

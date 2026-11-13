@@ -163,6 +163,38 @@ describe("wavoDb storage layer", () => {
     });
     const cadenceRecord = await wavoDb.getLyrics("track_cadence_line");
     expect(cadenceRecord).toBeNull();
+
+    // lrclib is line-sync only; word-level records are rejected.
+    await wavoDb.putLyrics({
+      trackId: "track_lrclib_word",
+      syncLevel: "word_level",
+      quality: 84,
+      activeProvider: "lrclib",
+      availableProviders: [],
+      rawLyrics: "[00:01.00] Estimated words",
+      rawFormat: "richsync",
+      candidate: {
+        provider: "lrclib",
+        contentKind: "word_synced",
+        syncLevel: "word_level",
+        quality: {
+          total: 84,
+          match: 30,
+          content: 24,
+          sync: 20,
+          source: 10,
+          reasons: [],
+        },
+        lyrics: {
+          format: "richsync",
+          content: "[00:01.00] Estimated words",
+        },
+      },
+      lastCheckedAt: initialTime,
+      updatedAt: initialTime,
+    });
+    const lrclibWordRecord = await wavoDb.getLyrics("track_lrclib_word");
+    expect(lrclibWordRecord).toBeNull();
   });
 
   it("stores artist data and calculates total artist bytes", async () => {

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import AppFrame from "@/features/navigation/ui/AppFrame";
 import ListeningSync from "@/features/social/ListeningSync";
+import { isDevGuestMode } from "@/shared/api/devIdentity";
 import { takePendingReleaseToken } from "@/app/pendingReleaseLink";
 
 export function AuthLock({ children }: { children: React.ReactNode }) {
@@ -10,8 +11,9 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const status = useAuthStore((state) => state.status);
   const initialize = useAuthStore((state) => state.initialize);
-  const skipLogin = import.meta.env.DEV && import.meta.env.VITE_DEV_SKIP_LOGIN !== "false";
+  const skipLogin = isDevGuestMode();
   const canEnterApp = status === "authenticated" || skipLogin;
+  const listeningEnabled = status === "authenticated" || skipLogin;
 
   useEffect(() => {
     void initialize();
@@ -39,7 +41,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return pathname === "/login" ? children : <>{status === "authenticated" && <ListeningSync />}<AppFrame>{children}</AppFrame></>;
+  return pathname === "/login" ? children : <>{listeningEnabled && <ListeningSync />}<AppFrame>{children}</AppFrame></>;
 }
 
 export default AuthLock;
